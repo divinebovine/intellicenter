@@ -26,6 +26,13 @@ repos:
           - --format=custom
           - --configfile=pyproject.toml
         additional_dependencies: ["bandit[toml]"]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --no-strict-optional]
+        additional_dependencies: []
+        files: ^custom_components/intellicenter/
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

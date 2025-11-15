@@ -125,10 +125,9 @@ class PoolObject:
         changed = {}
 
         for key, value in updates.items():
-            if key in self._properties:
-                if self._properties[key] == value:
-                    # ignore unchanged existing value
-                    continue
+            if key in self._properties and self._properties[key] == value:
+                # ignore unchanged existing value
+                continue
 
             # there are a few case when we receive the type/subtype in an update
             if key == OBJTYP_ATTR:
@@ -177,7 +176,7 @@ class PoolModel:
         """Return an object based on its objnam."""
         return self._objects.get(key)
 
-    def getByType(self, type: str, subtype: str = None) -> list[PoolObject]:
+    def getByType(self, type: str, subtype: str | None = None) -> list[PoolObject]:
         """Return all the object which match the type and the optional subtype.
 
         examples:

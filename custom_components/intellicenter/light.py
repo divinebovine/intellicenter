@@ -2,7 +2,7 @@
 
 from functools import reduce
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.components.light import (
     ATTR_EFFECT,
@@ -86,7 +86,7 @@ class PoolLight(PoolEntity, LightEntity):
     """Representation of an Pentair light."""
 
     _attr_color_mode = ColorMode.ONOFF
-    _attr_supported_color_modes = {ColorMode.ONOFF}
+    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.ONOFF}
     _attr_supported_features = LightEntityFeature(0)
 
     def __init__(
