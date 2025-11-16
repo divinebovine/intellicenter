@@ -13,10 +13,11 @@ _LOGGER = logging.getLogger(__name__)
 # Connection monitoring configuration constants
 # NOTE: IntelliCenter does NOT support ping/pong protocol
 # It sends NotifyList push updates when equipment state changes
-# We rely on flow control timeout and TCP keepalive for connection health
+# We send periodic keepalive queries to maintain connection health
 HEARTBEAT_INTERVAL = 30  # Check connection health every 30 seconds
 FLOW_CONTROL_TIMEOUT = 45  # Reset flow control if stuck for 45 seconds
-CONNECTION_IDLE_TIMEOUT = 120  # Close connection if no data received for 120 seconds
+KEEPALIVE_INTERVAL = 90  # Send keepalive query every 90 seconds
+CONNECTION_IDLE_TIMEOUT = 300  # Close connection if no data received for 5 minutes (should never happen with keepalives)
 
 
 class ICProtocol(asyncio.Protocol):
@@ -54,6 +55,9 @@ class ICProtocol(asyncio.Protocol):
         # Track last data received time for connection health monitoring
         self._last_data_received = None
 
+        # Track last keepalive sent time
+        self._last_keepalive_sent = None
+
         # heartbeat task for monitoring connection health
         self._heartbeat_task = None
 
@@ -65,6 +69,7 @@ class ICProtocol(asyncio.Protocol):
         current_time = asyncio.get_event_loop().time()
         self._last_flow_control_activity = current_time
         self._last_data_received = current_time
+        self._last_keepalive_sent = current_time
 
         # Start the heartbeat monitoring task
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -211,12 +216,13 @@ class ICProtocol(asyncio.Protocol):
                 self._transport.close()
 
     async def _heartbeat_loop(self):
-        """Monitor connection health without sending ping messages.
+        """Monitor connection health and send keepalive queries.
 
         IntelliCenter does not support ping/pong protocol. Instead, we:
-        1. Monitor for flow control deadlocks
-        2. Detect idle connections (no data received for extended period)
-        3. Rely on IntelliCenter's NotifyList push updates for liveness
+        1. Send periodic keepalive queries to ensure data flow
+        2. Monitor for flow control deadlocks
+        3. Detect idle connections (no data received for extended period)
+        4. Rely on IntelliCenter's NotifyList push updates for state changes
         """
         try:
             while True:
@@ -227,6 +233,27 @@ class ICProtocol(asyncio.Protocol):
                     break
 
                 current_time = asyncio.get_event_loop().time()
+
+                # Send keepalive query if needed
+                if self._last_keepalive_sent:
+                    time_since_keepalive = current_time - self._last_keepalive_sent
+                    if time_since_keepalive > KEEPALIVE_INTERVAL:
+                        _LOGGER.debug(
+                            f"PROTOCOL: sending keepalive query ({time_since_keepalive:.1f}s since last)"
+                        )
+                        # Send a lightweight query to keep the connection alive
+                        # Query the SYSTEM object's MODE attribute (always exists)
+                        try:
+                            self.sendCmd(
+                                "GetParamList",
+                                {
+                                    "condition": "OBJTYP=SYSTEM",
+                                    "objectList": [{"objnam": "INCR", "keys": ["MODE"]}],
+                                },
+                            )
+                            self._last_keepalive_sent = current_time
+                        except Exception as err:
+                            _LOGGER.debug(f"PROTOCOL: keepalive query failed: {err}")
 
                 # Check for flow control deadlock
                 if self._last_flow_control_activity:
@@ -259,13 +286,6 @@ class ICProtocol(asyncio.Protocol):
                         if self._transport:
                             self._transport.close()
                         break
-                    elif time_since_data > 60:
-                        # Log a debug message if we haven't received data in a while
-                        # but haven't hit the timeout yet
-                        _LOGGER.debug(
-                            f"PROTOCOL: connection idle for {time_since_data:.1f}s "
-                            f"(will timeout at {CONNECTION_IDLE_TIMEOUT}s)"
-                        )
 
         except asyncio.CancelledError:
             _LOGGER.debug("PROTOCOL: heartbeat task cancelled")
