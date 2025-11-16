@@ -10,10 +10,13 @@ _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 
-# Heartbeat configuration constants
-HEARTBEAT_INTERVAL = 10  # Send ping every 10 seconds
-MAX_MISSED_PINGS = 2  # Close connection after 2 missed pongs
-FLOW_CONTROL_TIMEOUT = 30  # Reset flow control if stuck for 30 seconds
+# Connection monitoring configuration constants
+# NOTE: IntelliCenter does NOT support ping/pong protocol
+# It sends NotifyList push updates when equipment state changes
+# We rely on flow control timeout and TCP keepalive for connection health
+HEARTBEAT_INTERVAL = 30  # Check connection health every 30 seconds
+FLOW_CONTROL_TIMEOUT = 45  # Reset flow control if stuck for 45 seconds
+CONNECTION_IDLE_TIMEOUT = 120  # Close connection if no data received for 120 seconds
 
 
 class ICProtocol(asyncio.Protocol):
@@ -23,9 +26,10 @@ class ICProtocol(asyncio.Protocol):
     - generating unique msg ids for outgoing requests
     - receiving data from the transport and combining it into a proper json object
     - managing a 'only-one-request-out-one-the-wire' policy
-    this is more a "works better that way" thand a real requirement as far as know
-    - sending regular (every 10s) 'ping' requests and closing the connection if 'pong'
-    replies are not received fast enough (we allow 2 outstanding which is generous)
+      (IntelliCenter struggles with concurrent requests)
+    - monitoring connection health via idle timeout (IntelliCenter does NOT support ping/pong)
+    - detecting flow control deadlocks and automatically recovering
+    - relying on IntelliCenter's NotifyList push updates to detect active connections
     """
 
     def __init__(self, controller):
@@ -47,8 +51,8 @@ class ICProtocol(asyncio.Protocol):
         self._out_queue = SimpleQueue()
         self._last_flow_control_activity = None
 
-        # and the number of unacknowledgged ping issued
-        self._num_unacked_pings = 0
+        # Track last data received time for connection health monitoring
+        self._last_data_received = None
 
         # heartbeat task for monitoring connection health
         self._heartbeat_task = None
@@ -58,8 +62,9 @@ class ICProtocol(asyncio.Protocol):
 
         self._transport = transport
         self._msgID = 1
-        self._num_unacked_pings = 0
-        self._last_flow_control_activity = asyncio.get_event_loop().time()
+        current_time = asyncio.get_event_loop().time()
+        self._last_flow_control_activity = current_time
+        self._last_data_received = current_time
 
         # Start the heartbeat monitoring task
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -79,6 +84,9 @@ class ICProtocol(asyncio.Protocol):
 
     def data_received(self, data) -> None:
         """Handle the callback for data received."""
+
+        # Update last data received timestamp
+        self._last_data_received = asyncio.get_event_loop().time()
 
         data = data.decode()
         _LOGGER.debug(f"PROTOCOL: received from transport: {data}")
@@ -158,17 +166,6 @@ class ICProtocol(asyncio.Protocol):
 
         _LOGGER.debug(f"PROTOCOL: processMessage {message}")
 
-        # if message is 'pong', response for a previous 'ping'
-        # do nothing except noting a response was received
-        if message == "pong":
-            self.responseReceived()
-            if self._num_unacked_pings > 0:
-                self._num_unacked_pings -= 1
-            _LOGGER.debug(
-                f"ping acknowledged (remaining unacked: {self._num_unacked_pings})"
-            )
-            return
-
         # a number of issues could be happening in this code section
         # let's wrap the whole thing in a broad catch statement
 
@@ -214,7 +211,13 @@ class ICProtocol(asyncio.Protocol):
                 self._transport.close()
 
     async def _heartbeat_loop(self):
-        """Periodically send ping messages and monitor connection health."""
+        """Monitor connection health without sending ping messages.
+
+        IntelliCenter does not support ping/pong protocol. Instead, we:
+        1. Monitor for flow control deadlocks
+        2. Detect idle connections (no data received for extended period)
+        3. Rely on IntelliCenter's NotifyList push updates for liveness
+        """
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
@@ -223,12 +226,11 @@ class ICProtocol(asyncio.Protocol):
                     _LOGGER.debug("PROTOCOL: heartbeat stopped - transport closed")
                     break
 
+                current_time = asyncio.get_event_loop().time()
+
                 # Check for flow control deadlock
                 if self._last_flow_control_activity:
-                    time_since_activity = (
-                        asyncio.get_event_loop().time()
-                        - self._last_flow_control_activity
-                    )
+                    time_since_activity = current_time - self._last_flow_control_activity
                     if (
                         self._out_pending > 0
                         and time_since_activity > FLOW_CONTROL_TIMEOUT
@@ -246,27 +248,24 @@ class ICProtocol(asyncio.Protocol):
                             except Exception:
                                 break
 
-                # Check if too many pings have been missed
-                if self._num_unacked_pings >= MAX_MISSED_PINGS:
-                    _LOGGER.error(
-                        f"PROTOCOL: missed {self._num_unacked_pings} pings - connection appears dead, closing"
-                    )
-                    if self._transport:
-                        self._transport.close()
-                    break
-
-                # Send ping
-                _LOGGER.debug(
-                    f"PROTOCOL: sending ping (unacked: {self._num_unacked_pings})"
-                )
-                self._num_unacked_pings += 1
-                try:
-                    self._transport.write(b"ping\r\n")
-                except Exception as err:
-                    _LOGGER.error(f"PROTOCOL: failed to send ping: {err}")
-                    if self._transport:
-                        self._transport.close()
-                    break
+                # Check for connection idle timeout (no data received)
+                if self._last_data_received:
+                    time_since_data = current_time - self._last_data_received
+                    if time_since_data > CONNECTION_IDLE_TIMEOUT:
+                        _LOGGER.warning(
+                            f"PROTOCOL: no data received for {time_since_data:.1f}s "
+                            f"(timeout: {CONNECTION_IDLE_TIMEOUT}s) - closing connection"
+                        )
+                        if self._transport:
+                            self._transport.close()
+                        break
+                    elif time_since_data > 60:
+                        # Log a debug message if we haven't received data in a while
+                        # but haven't hit the timeout yet
+                        _LOGGER.debug(
+                            f"PROTOCOL: connection idle for {time_since_data:.1f}s "
+                            f"(will timeout at {CONNECTION_IDLE_TIMEOUT}s)"
+                        )
 
         except asyncio.CancelledError:
             _LOGGER.debug("PROTOCOL: heartbeat task cancelled")

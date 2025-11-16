@@ -1,0 +1,1197 @@
+{
+  "valve_count": 4,
+  "valves": [
+    {
+      "objnam": "VAL03",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Intake",
+        "ASSIGN": "INTAKE",
+        "DLY": "OFF",
+        "PARENT": "M0102",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL03"
+      }
+    },
+    {
+      "objnam": "VAL01",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Valve A",
+        "ASSIGN": "NONE",
+        "DLY": "OFF",
+        "PARENT": "M0101",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL01"
+      }
+    },
+    {
+      "objnam": "VAL02",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Valve B",
+        "ASSIGN": "NONE",
+        "DLY": "OFF",
+        "PARENT": "M0101",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL02"
+      }
+    },
+    {
+      "objnam": "VAL04",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Return",
+        "ASSIGN": "RETURN",
+        "DLY": "OFF",
+        "PARENT": "M0102",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL04"
+      }
+    }
+  ],
+  "all_objects": [
+    {
+      "objnam": "p0107",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "X0045",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "_5451",
+      "params": {
+        "OBJTYP": "SYSTEM",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "BI>W;x]DF[m!+4fn)pp.;-q2eBl:(lDtn6]x1}A8jbFUg}]YcIQ0ko?gqm=)Vd#.",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "87657"
+      }
+    },
+    {
+      "objnam": "X0054",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "All Lights On",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "All Lights On"
+      }
+    },
+    {
+      "objnam": "X0055",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Pool Heat Enable",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pool Heat Enable"
+      }
+    },
+    {
+      "objnam": "_57A7",
+      "params": {
+        "OBJTYP": "PRESS",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "_57A7",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_57A7"
+      }
+    },
+    {
+      "objnam": "_A110",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "ALL",
+        "SNAME": "All Lights Off",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_A110"
+      }
+    },
+    {
+      "objnam": "_C105",
+      "params": {
+        "OBJTYP": "SYSTIM",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "_C105",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_C105"
+      }
+    },
+    {
+      "objnam": "_A111",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "ALL",
+        "SNAME": "All Lights On",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_A111"
+      }
+    },
+    {
+      "objnam": "_A135",
+      "params": {
+        "OBJTYP": "SENSE",
+        "SUBTYP": "AIR",
+        "SNAME": "Air Sensor",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_A135"
+      }
+    },
+    {
+      "objnam": "X0053",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "All Lights Off",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "All Lights Off"
+      }
+    },
+    {
+      "objnam": "X0052",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Solar",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Solar"
+      }
+    },
+    {
+      "objnam": "X0044",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Pool Heater",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pool Heater"
+      }
+    },
+    {
+      "objnam": "X0040",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Pump Speed -",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pump Speed -"
+      }
+    },
+    {
+      "objnam": "X0043",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Cleaner",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Cleaner"
+      }
+    },
+    {
+      "objnam": "X0045",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Spa Heater",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Spa Heater"
+      }
+    },
+    {
+      "objnam": "X0046",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Freeze",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Freeze"
+      }
+    },
+    {
+      "objnam": "X0051",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Heater",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Heater"
+      }
+    },
+    {
+      "objnam": "X0047",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Pool/Spa",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pool/Spa"
+      }
+    },
+    {
+      "objnam": "X0050",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Cleaners",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Cleaners"
+      }
+    },
+    {
+      "objnam": "_C10C",
+      "params": {
+        "OBJTYP": "SYSTIM",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "_C10C",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_C10C"
+      }
+    },
+    {
+      "objnam": "_CFEA",
+      "params": {
+        "OBJTYP": "FEATR",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "_CFEA",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "_CFEA"
+      }
+    },
+    {
+      "objnam": "p0101",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "C0006",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "c0201",
+      "params": {
+        "OBJTYP": "CIRCGRP",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "0",
+        "PARENT": "GRP02",
+        "CIRCUIT": "C0002",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "c0202",
+      "params": {
+        "OBJTYP": "CIRCGRP",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "0",
+        "PARENT": "GRP02",
+        "CIRCUIT": "C0004",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "p0102",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "C0001",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "p0103",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "FTR01",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "p0106",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "X0044",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "p0104",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "FTR02",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "p0105",
+      "params": {
+        "OBJTYP": "PMPCIRC",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PMP01",
+        "CIRCUIT": "FTR03",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "c0102",
+      "params": {
+        "OBJTYP": "CIRCGRP",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "0",
+        "PARENT": "GRP01",
+        "CIRCUIT": "C0003",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "c0101",
+      "params": {
+        "OBJTYP": "CIRCGRP",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "0",
+        "PARENT": "GRP01",
+        "CIRCUIT": "C0001",
+        "STATIC": "OFF",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0102",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM01",
+        "CIRCUIT": "C0002",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "_FEA2",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "FRZ",
+        "SNAME": "Freeze",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Freeze"
+      }
+    },
+    {
+      "objnam": "b0101",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM01",
+        "CIRCUIT": "C0006",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0103",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM01",
+        "CIRCUIT": "C0003",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0204",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM02",
+        "CIRCUIT": "C0004",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0104",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM01",
+        "CIRCUIT": "C0004",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0203",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM02",
+        "CIRCUIT": "C0003",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0201",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM02",
+        "CIRCUIT": "C0001",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "b0202",
+      "params": {
+        "OBJTYP": "REMBTN",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "SNAME",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "REM02",
+        "CIRCUIT": "C0002",
+        "STATIC": "ON",
+        "HNAME": "HNAME"
+      }
+    },
+    {
+      "objnam": "X0039",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Pump Speed +",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pump Speed +"
+      }
+    },
+    {
+      "objnam": "X0038",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Heat Enable",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Heat Enable"
+      }
+    },
+    {
+      "objnam": "FTR01",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "SPILL",
+        "SNAME": "Spillway",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "FTR01"
+      }
+    },
+    {
+      "objnam": "CVR01",
+      "params": {
+        "OBJTYP": "EXTINSTR",
+        "SUBTYP": "COVER",
+        "SNAME": "Cover 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PNL01",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "CVR01"
+      }
+    },
+    {
+      "objnam": "CVR02",
+      "params": {
+        "OBJTYP": "EXTINSTR",
+        "SUBTYP": "COVER",
+        "SNAME": "Cover 2",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PNL01",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "CVR02"
+      }
+    },
+    {
+      "objnam": "FTR02",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GENERIC",
+        "SNAME": "Backwash",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "FTR02"
+      }
+    },
+    {
+      "objnam": "FTR03",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GENERIC",
+        "SNAME": "Chlorinator",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "FTR03"
+      }
+    },
+    {
+      "objnam": "H0001",
+      "params": {
+        "OBJTYP": "HEATER",
+        "SUBTYP": "GENERIC",
+        "SNAME": "Gas Heater",
+        "ASSIGN": "ASSIGN",
+        "DLY": "5",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "H0001"
+      }
+    },
+    {
+      "objnam": "GRP01",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "CIRCGRP",
+        "SNAME": "Air Blower",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "GRP01"
+      }
+    },
+    {
+      "objnam": "GRP02",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "LITSHO",
+        "SNAME": "Accent Lights",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "GRP02"
+      }
+    },
+    {
+      "objnam": "CHR01",
+      "params": {
+        "OBJTYP": "CHEM",
+        "SUBTYP": "ICHLOR",
+        "SNAME": "IntelliChlor 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "CHR01"
+      }
+    },
+    {
+      "objnam": "CHM01",
+      "params": {
+        "OBJTYP": "CHEM",
+        "SUBTYP": "ICHEM",
+        "SNAME": "IntelliChem 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "CHM01"
+      }
+    },
+    {
+      "objnam": "C0001",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "SPA",
+        "SNAME": "Spa",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0102",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Spa"
+      }
+    },
+    {
+      "objnam": "B1101",
+      "params": {
+        "OBJTYP": "BODY",
+        "SUBTYP": "POOL",
+        "SNAME": "Pool",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "B1101"
+      }
+    },
+    {
+      "objnam": "B1202",
+      "params": {
+        "OBJTYP": "BODY",
+        "SUBTYP": "SPA",
+        "SNAME": "Spa",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0102",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "B1202"
+      }
+    },
+    {
+      "objnam": "C0002",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GLOW",
+        "SNAME": "Spa Light",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "AUX 1"
+      }
+    },
+    {
+      "objnam": "C0003",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GENERIC",
+        "SNAME": "Air Blower",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "AUX 2"
+      }
+    },
+    {
+      "objnam": "C0006",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "POOL",
+        "SNAME": "Pool",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Pool"
+      }
+    },
+    {
+      "objnam": "C0004",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GLOW",
+        "SNAME": "Pool Lights",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "AUX 3"
+      }
+    },
+    {
+      "objnam": "C0005",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "GENERIC",
+        "SNAME": "AUX 4",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "M0101",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "AUX 4"
+      }
+    },
+    {
+      "objnam": "M0101",
+      "params": {
+        "OBJTYP": "MODULE",
+        "SUBTYP": "I5P",
+        "SNAME": "M0101",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PNL01",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "M0101"
+      }
+    },
+    {
+      "objnam": "M0102",
+      "params": {
+        "OBJTYP": "MODULE",
+        "SUBTYP": "I5PS",
+        "SNAME": "M0102",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PNL01",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "M0102"
+      }
+    },
+    {
+      "objnam": "VAL03",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Intake",
+        "ASSIGN": "INTAKE",
+        "DLY": "OFF",
+        "PARENT": "M0102",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL03"
+      }
+    },
+    {
+      "objnam": "VAL01",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Valve A",
+        "ASSIGN": "NONE",
+        "DLY": "OFF",
+        "PARENT": "M0101",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL01"
+      }
+    },
+    {
+      "objnam": "VAL02",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Valve B",
+        "ASSIGN": "NONE",
+        "DLY": "OFF",
+        "PARENT": "M0101",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL02"
+      }
+    },
+    {
+      "objnam": "VAL04",
+      "params": {
+        "OBJTYP": "VALVE",
+        "SUBTYP": "LEGACY",
+        "SNAME": "Return",
+        "ASSIGN": "RETURN",
+        "DLY": "OFF",
+        "PARENT": "M0102",
+        "CIRCUIT": "00000",
+        "STATIC": "OFF",
+        "HNAME": "VAL04"
+      }
+    },
+    {
+      "objnam": "X0034",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Heat Pump",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Heat Pump"
+      }
+    },
+    {
+      "objnam": "X0037",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Heat Boost",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Heat Boost"
+      }
+    },
+    {
+      "objnam": "X0035",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "UltraTemp",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "UltraTemp"
+      }
+    },
+    {
+      "objnam": "X0036",
+      "params": {
+        "OBJTYP": "CIRCUIT",
+        "SUBTYP": "Generic",
+        "SNAME": "Hybrid",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "Hybrid"
+      }
+    },
+    {
+      "objnam": "UFFFE",
+      "params": {
+        "OBJTYP": "PERMIT",
+        "SUBTYP": "ADV",
+        "SNAME": "Administrator",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "UFFFE"
+      }
+    },
+    {
+      "objnam": "U0000",
+      "params": {
+        "OBJTYP": "PERMIT",
+        "SUBTYP": "BASIC",
+        "SNAME": "Guest",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "U0000"
+      }
+    },
+    {
+      "objnam": "REM01",
+      "params": {
+        "OBJTYP": "REMOTE",
+        "SUBTYP": "IS4",
+        "SNAME": "iS4 #1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "REM01"
+      }
+    },
+    {
+      "objnam": "PMP01",
+      "params": {
+        "OBJTYP": "PUMP",
+        "SUBTYP": "SPEED",
+        "SNAME": "VS",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "5",
+        "STATIC": "OFF",
+        "HNAME": "PMP01"
+      }
+    },
+    {
+      "objnam": "PNL01",
+      "params": {
+        "OBJTYP": "PANEL",
+        "SUBTYP": "OCP",
+        "SNAME": "Panel 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "PNL01"
+      }
+    },
+    {
+      "objnam": "REM02",
+      "params": {
+        "OBJTYP": "REMOTE",
+        "SUBTYP": "IS4",
+        "SNAME": "iS4 #2",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "OFF",
+        "HNAME": "REM02"
+      }
+    },
+    {
+      "objnam": "SSW11",
+      "params": {
+        "OBJTYP": "SENSE",
+        "SUBTYP": "POOL",
+        "SNAME": "Water Sensor 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "SSW11"
+      }
+    },
+    {
+      "objnam": "SCH01",
+      "params": {
+        "OBJTYP": "SCHED",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "Pool",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "C0006",
+        "STATIC": "OFF",
+        "HNAME": "SCH01"
+      }
+    },
+    {
+      "objnam": "SSS11",
+      "params": {
+        "OBJTYP": "SENSE",
+        "SUBTYP": "SOLAR",
+        "SNAME": "Solar Sensor 1",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "00000",
+        "CIRCUIT": "CIRCUIT",
+        "STATIC": "ON",
+        "HNAME": "SSS11"
+      }
+    },
+    {
+      "objnam": "SCH03",
+      "params": {
+        "OBJTYP": "SCHED",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "Chlorinator",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "FTR03",
+        "STATIC": "OFF",
+        "HNAME": "SCH03"
+      }
+    },
+    {
+      "objnam": "SCH04",
+      "params": {
+        "OBJTYP": "SCHED",
+        "SUBTYP": "SUBTYP",
+        "SNAME": "Spillway",
+        "ASSIGN": "ASSIGN",
+        "DLY": "DLY",
+        "PARENT": "PARENT",
+        "CIRCUIT": "FTR01",
+        "STATIC": "OFF",
+        "HNAME": "SCH04"
+      }
+    }
+  ]
+}

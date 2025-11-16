@@ -264,7 +264,7 @@ class PoolEntity(Entity):
     @property
     def unique_id(self):
         """Return a unique ID."""
-        my_id = self._entry_id + self._poolObject.objnam
+        my_id = self._entry_id + "_" + self._poolObject.objnam
         if self._attribute_key != STATUS_ATTR:
             my_id += self._attribute_key
         return my_id

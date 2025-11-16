@@ -146,4 +146,4 @@ class PoolLight(PoolEntity, LightEntity):
 
         myUpdates = updates.get(self._poolObject.objnam, {})
 
-        return myUpdates and {STATUS_ATTR, USE_ATTR} & myUpdates.keys()
+        return bool(myUpdates and ({STATUS_ATTR, USE_ATTR} & myUpdates.keys()))

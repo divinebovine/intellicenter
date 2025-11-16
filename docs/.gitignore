@@ -1,0 +1,4 @@
+# Temporary exploration files
+valve_output.log
+*.pyc
+__pycache__/

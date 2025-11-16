@@ -458,8 +458,15 @@ class ModelController(BaseController):
 class ConnectionHandler:
     """Helper class to recover the connect/disconnect/reconnect cycle of a controller."""
 
-    def __init__(self, controller, timeBetweenReconnects=30):
-        """Initialize the handler."""
+    def __init__(self, controller, timeBetweenReconnects=30, disconnectDebounceTime=15):
+        """Initialize the handler.
+
+        Args:
+            controller: The controller to manage
+            timeBetweenReconnects: Initial delay between reconnection attempts (default: 30s)
+            disconnectDebounceTime: Grace period before marking as disconnected (default: 15s)
+                This prevents rapid online/offline transitions from triggering notifications
+        """
         self._controller = controller
 
         self._starterTask = None
@@ -467,6 +474,9 @@ class ConnectionHandler:
         self._firstTime = True
 
         self._timeBetweenReconnects = timeBetweenReconnects
+        self._disconnectDebounceTime = disconnectDebounceTime
+        self._disconnectDebounceTask = None
+        self._isConnected = False
 
         controller._diconnectedCallback = self._diconnectedCallback
 
@@ -503,11 +513,20 @@ class ConnectionHandler:
 
                 await self._controller.start()
 
+                # Cancel any pending disconnect debounce
+                if self._disconnectDebounceTask and not self._disconnectDebounceTask.done():
+                    self._disconnectDebounceTask.cancel()
+                    self._disconnectDebounceTask = None
+
                 if self._firstTime:
                     self.started(self._controller)
                     self._firstTime = False
+                    self._isConnected = True
                 else:
-                    self.reconnected(self._controller)
+                    # Only call reconnected if we were previously marked as disconnected
+                    if not self._isConnected:
+                        self.reconnected(self._controller)
+                    self._isConnected = True
 
                 started = True
                 self._starterTask = None
@@ -524,15 +543,48 @@ class ConnectionHandler:
         if self._starterTask:
             self._starterTask.cancel()
             self._starterTask = None
+        if self._disconnectDebounceTask and not self._disconnectDebounceTask.done():
+            self._disconnectDebounceTask.cancel()
+            self._disconnectDebounceTask = None
         self._controller.stop()
+
+    async def _delayed_disconnect_notification(self, controller, err):
+        """Notify about disconnection after debounce period.
+
+        This prevents rapid online/offline notifications when the connection
+        is unstable or briefly interrupted.
+        """
+        try:
+            await asyncio.sleep(self._disconnectDebounceTime)
+            # Only notify if we're still not connected after the debounce period
+            if not self._isConnected:
+                _LOGGER.info(
+                    f"system confirmed disconnected from {self._controller.host} "
+                    f"after {self._disconnectDebounceTime}s grace period"
+                )
+                self.disconnected(controller, err)
+        except asyncio.CancelledError:
+            _LOGGER.debug("disconnect notification cancelled - system reconnected")
 
     def _diconnectedCallback(self, controller, err):
         """Handle the disconnection of the underlying controller."""
-        self.disconnected(controller, err)
         if not self._stopped:
-            _LOGGER.error(
-                f"system disconnected  from {self._controller.host} {err if err else ''}"
+            _LOGGER.warning(
+                f"system disconnected from {self._controller.host} {err if err else ''} "
+                f"- waiting {self._disconnectDebounceTime}s before marking unavailable"
             )
+
+            # Mark as disconnected immediately for internal tracking
+            self._isConnected = False
+
+            # Schedule debounced disconnect notification
+            if self._disconnectDebounceTask and not self._disconnectDebounceTask.done():
+                self._disconnectDebounceTask.cancel()
+            self._disconnectDebounceTask = asyncio.create_task(
+                self._delayed_disconnect_notification(controller, err)
+            )
+
+            # Start reconnection attempt
             self._starterTask = asyncio.create_task(
                 self._starter(self._timeBetweenReconnects)
             )
