@@ -248,7 +248,9 @@ class ICProtocol(asyncio.Protocol):
                                 "GetParamList",
                                 {
                                     "condition": "OBJTYP=SYSTEM",
-                                    "objectList": [{"objnam": "INCR", "keys": ["MODE"]}],
+                                    "objectList": [
+                                        {"objnam": "INCR", "keys": ["MODE"]}
+                                    ],
                                 },
                             )
                             self._last_keepalive_sent = current_time
@@ -257,7 +259,9 @@ class ICProtocol(asyncio.Protocol):
 
                 # Check for flow control deadlock
                 if self._last_flow_control_activity:
-                    time_since_activity = current_time - self._last_flow_control_activity
+                    time_since_activity = (
+                        current_time - self._last_flow_control_activity
+                    )
                     if (
                         self._out_pending > 0
                         and time_since_activity > FLOW_CONTROL_TIMEOUT

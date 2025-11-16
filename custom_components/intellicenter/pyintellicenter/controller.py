@@ -514,7 +514,10 @@ class ConnectionHandler:
                 await self._controller.start()
 
                 # Cancel any pending disconnect debounce
-                if self._disconnectDebounceTask and not self._disconnectDebounceTask.done():
+                if (
+                    self._disconnectDebounceTask
+                    and not self._disconnectDebounceTask.done()
+                ):
                     self._disconnectDebounceTask.cancel()
                     self._disconnectDebounceTask = None
 
