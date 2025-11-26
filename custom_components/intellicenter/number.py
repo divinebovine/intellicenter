@@ -1,6 +1,12 @@
-"""Pentair Intellicenter numbers."""
+"""Pentair Intellicenter numbers.
+
+This module provides number entities for IntelliChlor output percentage control.
+"""
+
+from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.number import (
     DEFAULT_MAX_VALUE,
@@ -11,9 +17,9 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import PoolEntity
-from .const import DOMAIN
+from . import PoolEntity, get_controller
 from .pyintellicenter import (
     BODY_ATTR,
     CHEM_TYPE,
@@ -29,22 +35,26 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
-):
-    """Load pool numbers based on a config entry."""
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Load pool number entities based on a config entry."""
+    controller = get_controller(hass, entry)
 
-    controller: ModelController = hass.data[DOMAIN][entry.entry_id].controller
+    numbers: list[PoolNumber] = []
 
-    numbers = []
-
-    obj: PoolObject
-    for obj in controller.model.objectList:
+    pool_obj: PoolObject
+    for pool_obj in controller.model.objectList:
         if (
-            obj.objtype == CHEM_TYPE
-            and obj.subtype == "ICHLOR"
-            and PRIM_ATTR in obj.attributes
+            pool_obj.objtype == CHEM_TYPE
+            and pool_obj.subtype == "ICHLOR"
+            and PRIM_ATTR in pool_obj.attributes
         ):
-            intellichlor_bodies = obj[BODY_ATTR].split(" ")
+            body_attr = pool_obj[BODY_ATTR]
+            if body_attr is None:
+                continue
+            intellichlor_bodies = body_attr.split(" ")
 
             # Only create number entities for bodies that are actually configured
             for index, body_id in enumerate(intellichlor_bodies):
@@ -55,7 +65,7 @@ async def async_setup_entry(
                         PoolNumber(
                             entry,
                             controller,
-                            obj,
+                            pool_obj,
                             unit_of_measurement=PERCENTAGE,
                             attribute_key=attribute_key,
                             name=f"+ Output % ({body.sname})",
@@ -68,8 +78,10 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolNumber(PoolEntity, NumberEntity):
+class PoolNumber(PoolEntity, NumberEntity):  # type: ignore[misc]
     """Representation of a pool number entity."""
+
+    _attr_icon = "mdi:gauge"
 
     def __init__(
         self,
@@ -79,19 +91,28 @@ class PoolNumber(PoolEntity, NumberEntity):
         min_value: float = DEFAULT_MIN_VALUE,
         max_value: float = DEFAULT_MAX_VALUE,
         step: float = DEFAULT_STEP,
-        **kwargs,
-    ):
-        """Initialize."""
+        **kwargs: Any,
+    ) -> None:
+        """Initialize a pool number entity.
+
+        Args:
+            entry: The config entry for this integration
+            controller: The ModelController managing the connection
+            poolObject: The PoolObject this entity represents
+            min_value: Minimum value for the number
+            max_value: Maximum value for the number
+            step: Step size for value changes
+            **kwargs: Additional arguments passed to PoolEntity
+        """
         super().__init__(entry, controller, poolObject, **kwargs)
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
-        self._attr_icon = "mdi:gauge"
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return the current value."""
-        return self._poolObject[self._attribute_key]
+        return self._safe_float_conversion(self._poolObject[self._attribute_key])
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""

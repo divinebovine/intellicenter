@@ -1,4 +1,9 @@
-"""Pentair Intellicenter covers."""
+"""Pentair Intellicenter covers.
+
+This module provides cover entities for pool covers and other motorized covers.
+"""
+
+from __future__ import annotations
 
 import logging
 from typing import Any
@@ -9,9 +14,9 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import PoolEntity
-from .const import DOMAIN
+from . import PoolEntity, get_controller
 from .pyintellicenter import (
     EXTINSTR_TYPE,
     NORMAL_ATTR,
@@ -26,17 +31,19 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
-):
-    """Load pool covers based on a config entry."""
-    controller: ModelController = hass.data[DOMAIN][entry.entry_id].controller
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Load pool cover entities based on a config entry."""
+    controller = get_controller(hass, entry)
 
-    covers = []
+    covers: list[PoolCover] = []
 
-    obj: PoolObject
-    for obj in controller.model.objectList:
-        if obj.objtype == EXTINSTR_TYPE and obj.subtype == "COVER":
-            covers.append(PoolCover(entry, controller, obj))
+    pool_obj: PoolObject
+    for pool_obj in controller.model.objectList:
+        if pool_obj.objtype == EXTINSTR_TYPE and pool_obj.subtype == "COVER":
+            covers.append(PoolCover(entry, controller, pool_obj))
 
     async_add_entities(covers)
 
@@ -44,7 +51,7 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolCover(PoolEntity, CoverEntity):
+class PoolCover(PoolEntity, CoverEntity):  # type: ignore[misc]
     """Representation of a Pentair pool cover."""
 
     def __init__(
@@ -52,8 +59,14 @@ class PoolCover(PoolEntity, CoverEntity):
         entry: ConfigEntry,
         controller: ModelController,
         poolObject: PoolObject,
-    ):
-        """Initialize."""
+    ) -> None:
+        """Initialize a pool cover entity.
+
+        Args:
+            entry: The config entry for this integration
+            controller: The ModelController managing the connection
+            poolObject: The PoolObject this cover represents
+        """
         super().__init__(
             entry,
             controller,
@@ -73,7 +86,7 @@ class PoolCover(PoolEntity, CoverEntity):
         # - STATUS is OFF and NORMAL is OFF (cover is normally open)
         status = self._poolObject[STATUS_ATTR] == "ON"
         normal = self._poolObject[NORMAL_ATTR] == "ON"
-        return status == normal
+        return bool(status == normal)
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""

@@ -1,6 +1,6 @@
 """Test the Pentair IntelliCenter integration initialization."""
 
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
@@ -123,24 +123,26 @@ async def test_async_unload_entry(hass: HomeAssistant) -> None:
     """Test unloading a config entry."""
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
+    entry.title = "Test Pool System"
     entry.data = {CONF_HOST: "192.168.1.100"}
 
-    # Set up the handler in hass.data
+    # Set up the handler in hass.data with new structure
     mock_handler = MagicMock()
     mock_handler.stop = MagicMock()
-    hass.data[DOMAIN] = {entry.entry_id: mock_handler}
+    mock_stop_listener = MagicMock()
+    hass.data[DOMAIN] = {
+        entry.entry_id: {"handler": mock_handler, "stop_listener": mock_stop_listener}
+    }
 
     with patch.object(
         hass.config_entries,
-        "async_forward_entry_unload",
+        "async_unload_platforms",
         new_callable=lambda: AsyncMock(return_value=True),
     ) as mock_unload:
         result = await async_unload_entry(hass, entry)
 
-        # Verify all platforms were unloaded
-        assert mock_unload.call_count == len(PLATFORMS)
-        for platform in PLATFORMS:
-            assert call(entry, platform) in mock_unload.call_args_list
+        # Verify async_unload_platforms was called with entry and platforms
+        mock_unload.assert_called_once_with(entry, PLATFORMS)
 
         # Verify handler was stopped
         mock_handler.stop.assert_called_once()
@@ -152,17 +154,22 @@ async def test_async_unload_entry(hass: HomeAssistant) -> None:
 
 
 async def test_async_unload_entry_platforms_fail(hass: HomeAssistant) -> None:
-    """Test unload succeeds even when platforms fail to unload."""
+    """Test unload returns False when platforms fail to unload."""
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
+    entry.title = "Test Pool System"
+    entry.data = {CONF_HOST: "192.168.1.100"}
 
-    # Set up the handler in hass.data
+    # Set up the handler in hass.data with new structure
     mock_handler = MagicMock()
-    hass.data[DOMAIN] = {entry.entry_id: mock_handler}
+    mock_stop_listener = MagicMock()
+    hass.data[DOMAIN] = {
+        entry.entry_id: {"handler": mock_handler, "stop_listener": mock_stop_listener}
+    }
 
     with patch.object(
         hass.config_entries,
-        "async_forward_entry_unload",
+        "async_unload_platforms",
         new_callable=lambda: AsyncMock(
             return_value=False
         ),  # Simulate platform unload failure
@@ -175,5 +182,5 @@ async def test_async_unload_entry_platforms_fail(hass: HomeAssistant) -> None:
         # Entry should still be removed (domain should be deleted if empty)
         assert DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]
 
-        # Current implementation always returns True (cleanup happens regardless)
-        assert result is True
+        # Now returns False when platforms fail to unload
+        assert result is False

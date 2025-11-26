@@ -15,6 +15,7 @@
       },
       "error": {
         "cannot_connect": "Failed to connect",
+        "invalid_host": "Invalid IP address or hostname",
         "unknown": "Unexpected Error"
       },
       "abort": {

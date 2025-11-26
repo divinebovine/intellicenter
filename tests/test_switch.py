@@ -33,7 +33,7 @@ async def test_switch_setup_creates_entities(
     mock_controller.model = pool_model
     mock_handler.controller = mock_controller
 
-    hass.data[DOMAIN] = {entry.entry_id: mock_handler}
+    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
 
     entities_added = []
 
@@ -264,7 +264,7 @@ async def test_non_featured_circuit_not_created(
     mock_controller.model = pool_model
     mock_handler.controller = mock_controller
 
-    hass.data[DOMAIN] = {entry.entry_id: mock_handler}
+    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
 
     entities_added = []
 

@@ -1,6 +1,15 @@
-"""Pentair Intellicenter sensors."""
+"""Pentair Intellicenter sensors.
+
+This module provides sensor entities for various pool measurements including:
+- Temperature sensors (air, water)
+- Pump sensors (power, RPM, GPM)
+- Chemistry sensors (pH, ORP, salt level, water quality)
+"""
+
+from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -10,9 +19,10 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION, UnitOfPower
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import PoolEntity
-from .const import CONST_GPM, CONST_RPM, DOMAIN
+from . import PoolEntity, get_controller
+from .const import CONST_GPM, CONST_RPM
 from .pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
@@ -40,13 +50,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
-):
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Load pool sensors based on a config entry."""
+    controller = get_controller(hass, entry)
 
-    controller: ModelController = hass.data[DOMAIN][entry.entry_id].controller
-
-    sensors = []
+    sensors: list[PoolSensor] = []
 
     obj: PoolObject
     for obj in controller.model.objectList:
@@ -195,8 +206,12 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolSensor(PoolEntity, SensorEntity):
-    """Representation of an Pentair sensor."""
+class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
+    """Representation of a Pentair sensor.
+
+    Supports temperature, power, and chemistry measurements with optional
+    value rounding for sensors with high update frequency.
+    """
 
     def __init__(
         self,
@@ -205,30 +220,48 @@ class PoolSensor(PoolEntity, SensorEntity):
         poolObject: PoolObject,
         device_class: SensorDeviceClass | None,
         rounding_factor: int = 0,
-        **kwargs,
-    ):
-        """Initialize."""
+        **kwargs: Any,
+    ) -> None:
+        """Initialize a pool sensor.
+
+        Args:
+            entry: The config entry for this integration
+            controller: The ModelController managing the connection
+            poolObject: The PoolObject this sensor represents
+            device_class: The device class for this sensor
+            rounding_factor: If non-zero, round values to this factor
+            **kwargs: Additional arguments passed to PoolEntity
+        """
         super().__init__(entry, controller, poolObject, **kwargs)
         self._attr_device_class = device_class
         self._rounding_factor = rounding_factor
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
-    def state(self) -> str:
-        """Return the state of the sensor."""
+    def native_value(self) -> float | int | str | None:
+        """Return the native value of the sensor.
 
-        value = str(self._poolObject[self._attribute_key])
+        Some sensors (like variable speed pumps) can vary constantly,
+        so rounding their value to a nearest multiplier of 'rounding_factor'
+        smooths the curve and limits the number of updates in the log.
+        """
+        raw_value = self._poolObject[self._attribute_key]
+        if raw_value is None:
+            return None
 
-        # some sensors, like variable speed pumps, can vary constantly
-        # so rounding their value to a nearest multiplier of 'rounding'
-        # smoothes the curve and limits the number of updates in the log
-
-        if self._rounding_factor:
-            value = str(
-                int(round(int(value) / self._rounding_factor) * self._rounding_factor)
-            )
-
-        return value
+        try:
+            value = int(raw_value)
+            if self._rounding_factor:
+                value = int(
+                    round(value / self._rounding_factor) * self._rounding_factor
+                )
+            return value
+        except (ValueError, TypeError):
+            # Return as-is if not convertible to int (e.g., pH values as float)
+            try:
+                return float(raw_value)
+            except (ValueError, TypeError):
+                return str(raw_value)
 
     @property
     def native_unit_of_measurement(self) -> str | None:
@@ -236,3 +269,16 @@ class PoolSensor(PoolEntity, SensorEntity):
         if self._attr_device_class == SensorDeviceClass.TEMPERATURE:
             return self.pentairTemperatureSettings()
         return self._attr_native_unit_of_measurement
+
+    def isUpdated(self, updates: dict[str, dict[str, Any]]) -> bool:
+        """Return true if the entity is updated by the updates from IntelliCenter.
+
+        Checks if the specific attribute this sensor monitors was updated.
+
+        Args:
+            updates: Dictionary of object updates
+
+        Returns:
+            True if this sensor's monitored attribute was updated
+        """
+        return self._attribute_key in updates.get(self._poolObject.objnam, {})

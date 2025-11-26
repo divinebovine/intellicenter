@@ -10,6 +10,7 @@ from custom_components.intellicenter.pyintellicenter.protocol import (
     CONNECTION_IDLE_TIMEOUT,
     FLOW_CONTROL_TIMEOUT,
     HEARTBEAT_INTERVAL,
+    MAX_MISSED_KEEPALIVES,
     ICProtocol,
 )
 
@@ -111,7 +112,9 @@ class TestICProtocolConnection:
 class TestICProtocolDataReceived:
     """Test ICProtocol data receiving."""
 
-    async def test_data_received_complete_message(self, mock_controller, mock_transport):
+    async def test_data_received_complete_message(
+        self, mock_controller, mock_transport
+    ):
         """Test receiving complete message."""
         protocol = ICProtocol(mock_controller)
         protocol.connection_made(mock_transport)
@@ -131,7 +134,9 @@ class TestICProtocolDataReceived:
         protocol.connection_lost(None)
         await asyncio.sleep(0.1)
 
-    async def test_data_received_multiple_messages(self, mock_controller, mock_transport):
+    async def test_data_received_multiple_messages(
+        self, mock_controller, mock_transport
+    ):
         """Test receiving multiple messages in one chunk."""
         protocol = ICProtocol(mock_controller)
         protocol.connection_made(mock_transport)
@@ -208,7 +213,9 @@ class TestICProtocolHeartbeat:
         protocol.connection_lost(None)
         await asyncio.sleep(0.1)
 
-    async def test_heartbeat_detects_idle_timeout(self, mock_controller, mock_transport):
+    async def test_heartbeat_detects_idle_timeout(
+        self, mock_controller, mock_transport
+    ):
         """Test heartbeat detects idle connection."""
         protocol = ICProtocol(mock_controller)
         protocol.connection_made(mock_transport)
@@ -236,8 +243,8 @@ class TestICProtocolHeartbeat:
 
         # Simulate deadlock: pending requests with no activity
         protocol._out_pending = 5
-        protocol._out_queue.put("queued1")
-        protocol._out_queue.put("queued2")
+        protocol._out_queue.put_nowait("queued1")
+        protocol._out_queue.put_nowait("queued2")
         protocol._last_flow_control_activity = asyncio.get_event_loop().time() - (
             FLOW_CONTROL_TIMEOUT + 10
         )
@@ -253,7 +260,9 @@ class TestICProtocolHeartbeat:
         protocol.connection_lost(None)
         await asyncio.sleep(0.1)
 
-    async def test_heartbeat_cancelled_on_disconnect(self, mock_controller, mock_transport):
+    async def test_heartbeat_cancelled_on_disconnect(
+        self, mock_controller, mock_transport
+    ):
         """Test heartbeat task is cancelled on disconnect."""
         protocol = ICProtocol(mock_controller)
         protocol.connection_made(mock_transport)
@@ -266,3 +275,176 @@ class TestICProtocolHeartbeat:
 
         # Task should be cancelled
         assert heartbeat_task.cancelled() or heartbeat_task.done()
+
+
+class TestICProtocolKeepalive:
+    """Test ICProtocol keepalive response tracking."""
+
+    async def test_keepalive_tracking_initialization(
+        self, mock_controller, mock_transport
+    ):
+        """Test keepalive tracking variables are initialized."""
+        protocol = ICProtocol(mock_controller)
+
+        assert protocol._pending_keepalive_id is None
+        assert protocol._keepalive_response_pending is False
+        assert protocol._missed_keepalive_responses == 0
+
+        # Cleanup
+        protocol.connection_made(mock_transport)
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    async def test_keepalive_response_clears_pending_flag(
+        self, mock_controller, mock_transport
+    ):
+        """Test that receiving keepalive response clears pending flag."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        # Simulate pending keepalive
+        protocol._pending_keepalive_id = "42"
+        protocol._keepalive_response_pending = True
+        protocol._missed_keepalive_responses = 1
+
+        # Receive keepalive response
+        message = json.dumps(
+            {
+                "messageID": "42",
+                "command": "GetParamList",
+                "response": "200",
+                "objectList": [],
+            }
+        )
+        protocol.processMessage(message)
+
+        # Pending flag should be cleared
+        assert protocol._keepalive_response_pending is False
+        assert protocol._missed_keepalive_responses == 0
+        assert protocol._pending_keepalive_id is None
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    async def test_keepalive_non_matching_id_not_cleared(
+        self, mock_controller, mock_transport
+    ):
+        """Test that non-matching message ID doesn't clear keepalive."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        # Simulate pending keepalive
+        protocol._pending_keepalive_id = "42"
+        protocol._keepalive_response_pending = True
+        protocol._missed_keepalive_responses = 1
+
+        # Receive response with different ID
+        message = json.dumps(
+            {
+                "messageID": "99",
+                "command": "GetParamList",
+                "response": "200",
+                "objectList": [],
+            }
+        )
+        protocol.processMessage(message)
+
+        # Pending flag should NOT be cleared
+        assert protocol._keepalive_response_pending is True
+        assert protocol._missed_keepalive_responses == 1
+        assert protocol._pending_keepalive_id == "42"
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    async def test_keepalive_error_response_not_cleared(
+        self, mock_controller, mock_transport
+    ):
+        """Test that error response doesn't clear keepalive pending flag."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        # Simulate pending keepalive
+        protocol._pending_keepalive_id = "42"
+        protocol._keepalive_response_pending = True
+        protocol._missed_keepalive_responses = 1
+
+        # Receive error response with matching ID
+        message = json.dumps(
+            {
+                "messageID": "42",
+                "command": "GetParamList",
+                "response": "500",  # Error response
+                "error": "Something went wrong",
+            }
+        )
+        protocol.processMessage(message)
+
+        # Pending flag should NOT be cleared (only 200 clears it)
+        assert protocol._keepalive_response_pending is True
+        assert protocol._missed_keepalive_responses == 1
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    def test_max_missed_keepalives_constant(self):
+        """Test MAX_MISSED_KEEPALIVES constant is defined."""
+        assert MAX_MISSED_KEEPALIVES == 3
+
+
+class TestICProtocolFlowControl:
+    """Test ICProtocol flow control."""
+
+    async def test_response_received_decrements_pending(
+        self, mock_controller, mock_transport
+    ):
+        """Test responseReceived decrements pending count."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        # Simulate pending request
+        protocol._out_pending = 2
+
+        protocol.responseReceived()
+
+        assert protocol._out_pending == 1
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    async def test_send_cmd_increments_pending(self, mock_controller, mock_transport):
+        """Test sendCmd increments pending count."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        initial_pending = protocol._out_pending
+        protocol.sendCmd("Test", {})
+
+        # Should have one pending request
+        assert protocol._out_pending == initial_pending + 1
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)
+
+    async def test_send_cmd_queues_when_pending(self, mock_controller, mock_transport):
+        """Test sendCmd queues requests when pending limit reached."""
+        protocol = ICProtocol(mock_controller)
+        protocol.connection_made(mock_transport)
+
+        # Set pending to max
+        protocol._out_pending = 1
+
+        # Send another command - should be queued
+        protocol.sendCmd("Test", {})
+
+        # Should be queued, not sent immediately
+        assert protocol._out_queue.qsize() == 1
+
+        # Cleanup
+        protocol.connection_lost(None)
+        await asyncio.sleep(0.1)

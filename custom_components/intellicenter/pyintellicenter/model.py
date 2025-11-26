@@ -1,6 +1,14 @@
-"""Model class for storing a Pentair system."""
+"""Model class for storing a Pentair system.
+
+This module provides the data model classes for representing pool equipment
+and their state. It's used by the controller to maintain a synchronized
+view of the IntelliCenter system.
+"""
+
+from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 from .attributes import (
     ALL_ATTRIBUTES_BY_TYPE,
@@ -13,43 +21,61 @@ from .attributes import (
     SUBTYP_ATTR,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 
+# Light subtypes that represent illumination devices
+LIGHT_SUBTYPES = frozenset(["LIGHT", "INTELLI", "GLOW", "GLOWT", "DIMMER", "MAGIC2"])
+
+# Light subtypes that support color effects
+COLOR_EFFECT_SUBTYPES = frozenset(["INTELLI", "MAGIC2", "GLOW"])
+
 
 class PoolObject:
-    """Representation of an object in the Pentair system."""
+    """Representation of an object in the Pentair system.
 
-    def __init__(self, objnam, params):
-        """Initialize."""
+    A PoolObject represents a single piece of equipment (pump, light, heater, etc.)
+    with its type, subtype, and current attribute values.
+    """
+
+    def __init__(self, objnam: str, params: dict[str, Any]) -> None:
+        """Initialize from object name and parameters.
+
+        Args:
+            objnam: The unique object identifier (e.g., "PUMP01", "LIGHT1")
+            params: Dictionary of object attributes including OBJTYP and optionally SUBTYP
+        """
         self._objnam = objnam
-        self._objtyp = params.pop(OBJTYP_ATTR)
-        self._subtyp = params.pop(SUBTYP_ATTR, None)
-        self._properties = params
+        self._objtyp: str = params.pop(OBJTYP_ATTR)
+        self._subtyp: str | None = params.pop(SUBTYP_ATTR, None)
+        self._properties: dict[str, Any] = params
 
     @property
-    def objnam(self):
+    def objnam(self) -> str:
         """Return the id of the object (OBJNAM)."""
         return self._objnam
 
     @property
-    def sname(self):
+    def sname(self) -> str | None:
         """Return the friendly name (SNAME)."""
         return self._properties.get(SNAME_ATTR)
 
     @property
-    def objtype(self):
+    def objtype(self) -> str:
         """Return the object type."""
         return self._objtyp
 
     @property
-    def subtype(self):
+    def subtype(self) -> str | None:
         """Return the object subtype."""
         return self._subtyp
 
     @property
-    def status(self) -> str:
+    def status(self) -> str | None:
         """Return the object status."""
         return self._properties.get(STATUS_ATTR)
 
@@ -65,36 +91,29 @@ class PoolObject:
 
     @property
     def isALight(self) -> bool:
-        """Return True is the object is a light."""
-        return self.objtype == CIRCUIT_TYPE and self.subtype in [
-            "LIGHT",
-            "INTELLI",
-            "GLOW",
-            "GLOWT",
-            "DIMMER",
-            "MAGIC2",
-        ]
+        """Return True if the object is a light."""
+        return self.objtype == CIRCUIT_TYPE and self.subtype in LIGHT_SUBTYPES
 
     @property
     def supportColorEffects(self) -> bool:
-        """Return True is object is a light that support color effects."""
-        return self.isALight and self.subtype in ["INTELLI", "MAGIC2", "GLOW"]
+        """Return True if object is a light that supports color effects."""
+        return self.isALight and self.subtype in COLOR_EFFECT_SUBTYPES
 
     @property
     def isALightShow(self) -> bool:
-        """Return True is the object is a light show."""
+        """Return True if the object is a light show."""
         return self.objtype == CIRCUIT_TYPE and self.subtype == "LITSHO"
 
     @property
     def isFeatured(self) -> bool:
-        """Return True is the object is Featured."""
-        return self[FEATR_ATTR] == "ON"
+        """Return True if the object is Featured."""
+        return bool(self[FEATR_ATTR] == "ON")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         """Return the value for attribute 'key'."""
         return self._properties.get(key)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a friendly string representation."""
         result = f"{self.objnam} "
         result += (
@@ -104,32 +123,38 @@ class PoolObject:
         )
         for key in sorted(set(self._properties.keys())):
             value = self._properties[key]
-            if type(value) is list:
+            if isinstance(value, list):
                 value = "[" + ",".join(f"{ {str(v)} }" for v in value) + "]"
             result += f" {key}: {value}"
         return result
 
     @property
-    def attributes(self) -> list:
+    def attributes(self) -> list[str]:
         """Return the list of attributes for this object."""
         return list(self._properties.keys())
 
     @property
-    def properties(self) -> dict:
+    def properties(self) -> dict[str, Any]:
         """Return the properties of the object."""
         return self._properties
 
-    def update(self, updates):
-        """Update the object from a set of key/value pairs, return the changed attributes."""
+    def update(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Update the object from a set of key/value pairs.
 
-        changed = {}
+        Args:
+            updates: Dictionary of attribute updates to apply
+
+        Returns:
+            Dictionary of attributes that actually changed
+        """
+        changed: dict[str, Any] = {}
 
         for key, value in updates.items():
             if key in self._properties and self._properties[key] == value:
-                # ignore unchanged existing value
+                # Ignore unchanged existing value
                 continue
 
-            # there are a few case when we receive the type/subtype in an update
+            # There are a few cases when we receive the type/subtype in an update
             if key == OBJTYP_ATTR:
                 self._objtyp = value
             elif key == SUBTYP_ATTR:
@@ -145,21 +170,36 @@ class PoolObject:
 
 
 class PoolModel:
-    """Representation of a subset of the underlying Pentair system."""
+    """Representation of a subset of the underlying Pentair system.
 
-    def __init__(self, attributeMap=ALL_ATTRIBUTES_BY_TYPE):
-        """Initialize."""
+    The PoolModel maintains a collection of PoolObjects and provides
+    methods for querying and updating them. It filters objects based
+    on an attribute map to only track relevant equipment types.
+    """
+
+    def __init__(
+        self,
+        attributeMap: dict[str, set[str]] | None = None,
+    ) -> None:
+        """Initialize the model.
+
+        Args:
+            attributeMap: Optional mapping of object types to their tracked attributes.
+                         Defaults to ALL_ATTRIBUTES_BY_TYPE.
+        """
         self._objects: dict[str, PoolObject] = {}
-        self._systemObject: PoolObject = None
-        self._attributeMap = attributeMap
+        self._systemObject: PoolObject | None = None
+        self._attributeMap = (
+            attributeMap if attributeMap is not None else ALL_ATTRIBUTES_BY_TYPE
+        )
 
     @property
-    def objectList(self):
+    def objectList(self) -> list[PoolObject]:
         """Return the list of objects contained in the model."""
-        return self._objects.values()
+        return list(self._objects.values())
 
     @property
-    def objects(self):
+    def objects(self) -> dict[str, PoolObject]:
         """Return the dictionary of objects contained in the model."""
         return self._objects
 
@@ -168,77 +208,117 @@ class PoolModel:
         """Return the number of objects contained in the model."""
         return len(self._objects)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[PoolObject]:
         """Allow iteration over all values."""
         return iter(self._objects.values())
 
-    def __getitem__(self, key) -> PoolObject:
+    def __getitem__(self, key: str) -> PoolObject | None:
         """Return an object based on its objnam."""
         return self._objects.get(key)
 
-    def getByType(self, type: str, subtype: str | None = None) -> list[PoolObject]:
-        """Return all the object which match the type and the optional subtype.
+    def getByType(self, obj_type: str, subtype: str | None = None) -> list[PoolObject]:
+        """Return all objects which match the type and optional subtype.
 
-        examples:
-            getByType('BODY') will return the object of type 'BODY'
-            getByType('BODY','SPA') will only return the Spa
+        Args:
+            obj_type: The object type to filter by (e.g., 'BODY', 'PUMP')
+            subtype: Optional subtype to further filter (e.g., 'SPA', 'POOL')
+
+        Returns:
+            List of matching PoolObjects
+
+        Examples:
+            getByType('BODY') will return all objects of type 'BODY'
+            getByType('BODY', 'SPA') will only return the Spa
         """
-        return list(
-            filter(
-                lambda object: object.objtype == type
-                and (not subtype or object.subtype == subtype),
-                self,
-            )
-        )
+        return [
+            obj
+            for obj in self
+            if obj.objtype == obj_type and (not subtype or obj.subtype == subtype)
+        ]
 
-    def getChildren(self, object: PoolObject) -> list[PoolObject]:
-        """Return the children of a given object."""
-        return list(filter(lambda v: v[PARENT_ATTR] == object.objnam, self))
+    def getChildren(self, pool_object: PoolObject) -> list[PoolObject]:
+        """Return the children of a given object.
 
-    def addObject(self, objnam, params):
-        """Update the model with a new object."""
-        # because the controller may be started more than once
+        Args:
+            pool_object: The parent object
+
+        Returns:
+            List of child PoolObjects
+        """
+        return [obj for obj in self if obj[PARENT_ATTR] == pool_object.objnam]
+
+    def addObject(self, objnam: str, params: dict[str, Any]) -> PoolObject | None:
+        """Update the model with a new object.
+
+        If the object already exists, updates its attributes instead.
+        Only adds objects whose type is in the attribute map.
+
+        Args:
+            objnam: The object identifier
+            params: Dictionary of object attributes
+
+        Returns:
+            The created/updated PoolObject, or None if type not in attribute map
+        """
+        # Because the controller may be started more than once,
         # we don't override existing objects
-        object = self._objects.get(objnam)
+        pool_obj = self._objects.get(objnam)
 
-        if not object:
-            object = PoolObject(objnam, params)
-            if object.objtype == "SYSTEM":
-                self._systemObject = object
-            if object.objtype in self._attributeMap:
-                self._objects[objnam] = object
+        if not pool_obj:
+            pool_obj = PoolObject(objnam, params)
+            if pool_obj.objtype == "SYSTEM":
+                self._systemObject = pool_obj
+            if pool_obj.objtype in self._attributeMap:
+                self._objects[objnam] = pool_obj
             else:
-                object = None
+                pool_obj = None
         else:
-            object.update(params)
-        return object
+            pool_obj.update(params)
+        return pool_obj
 
-    def addObjects(self, objList: list):
-        """Create or update from all the objects in the list."""
+    def addObjects(self, objList: list[dict[str, Any]]) -> None:
+        """Create or update from all the objects in the list.
+
+        Args:
+            objList: List of objects with 'objnam' and 'params' keys
+        """
         for elt in objList:
             self.addObject(elt["objnam"], elt["params"])
 
-    def attributesToTrack(self):
-        """Return all the object/attributes we want to track."""
-        query = []
-        for object in self.objectList:
-            attributes = self._attributeMap.get(object.objtype)
+    def attributesToTrack(self) -> list[dict[str, Any]]:
+        """Return all the object/attributes we want to track.
+
+        Returns:
+            List of query items with 'objnam' and 'keys' for each object
+        """
+        query: list[dict[str, Any]] = []
+        for pool_obj in self.objectList:
+            attributes = self._attributeMap.get(pool_obj.objtype)
             if not attributes:
-                # if we don't specify a set of attributes for this object type
-                # we will default to all know attributes for this type
-                attributes = ALL_ATTRIBUTES_BY_TYPE.get(object.objtype)
+                # If we don't specify a set of attributes for this object type,
+                # default to all known attributes for this type
+                attributes = ALL_ATTRIBUTES_BY_TYPE.get(pool_obj.objtype)
             if attributes:
-                query.append({"objnam": object.objnam, "keys": list(attributes)})
+                query.append({"objnam": pool_obj.objnam, "keys": list(attributes)})
         return query
 
-    def processUpdates(self, updates: list):
-        """Update the state of the objects in the model."""
-        updated = {}
+    def processUpdates(
+        self, updates: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Update the state of the objects in the model.
+
+        Args:
+            updates: List of updates with 'objnam' and 'params' keys
+
+        Returns:
+            Dictionary mapping objnam to their changed attributes
+        """
+        updated: dict[str, dict[str, Any]] = {}
         for update in updates:
             objnam = update["objnam"]
-            object = self._objects.get(objnam)
-            if object:
-                changed = object.update(update["params"])
+            pool_obj = self._objects.get(objnam)
+            if pool_obj:
+                changed = pool_obj.update(update["params"])
                 if changed:
                     updated[objnam] = changed
         return updated

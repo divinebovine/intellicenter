@@ -29,13 +29,13 @@ async def test_light_setup_creates_entities(
     entry.entry_id = "test_entry"
     entry.data = {CONF_HOST: "192.168.1.100"}
 
-    # Mock the handler
+    # Mock the handler with new data structure
     mock_handler = MagicMock()
     mock_controller = MagicMock()
     mock_controller.model = pool_model
     mock_handler.controller = mock_controller
 
-    hass.data[DOMAIN] = {entry.entry_id: mock_handler}
+    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
 
     entities_added = []
 
@@ -324,3 +324,164 @@ async def test_light_is_not_updated_by_irrelevant_attributes(
     }
 
     assert light.isUpdated(updates) is False
+
+
+# -------------------------------------------------------------------------------------
+# Parameterized tests for light effects
+# -------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "effect_code,effect_name",
+    [
+        ("PARTY", "Party Mode"),
+        ("CARIB", "Caribbean"),
+        ("SSET", "Sunset"),
+        ("ROMAN", "Romance"),
+        ("AMERCA", "American"),
+        ("ROYAL", "Royal"),
+        ("WHITER", "White"),
+        ("REDR", "Red"),
+        ("BLUER", "Blue"),
+        ("GREENR", "Green"),
+        ("MAGNTAR", "Magenta"),
+    ],
+)
+async def test_light_effect_mapping(
+    hass: HomeAssistant,
+    pool_object_light: PoolObject,
+    effect_code: str,
+    effect_name: str,
+) -> None:
+    """Test that each effect code maps to correct effect name."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+    mock_controller = MagicMock()
+
+    # Set light to use this effect
+    pool_object_light.update({"USE": effect_code})
+
+    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+
+    assert light.effect == effect_name
+    assert effect_name in light.effect_list
+
+
+@pytest.mark.parametrize(
+    "effect_name,expected_code",
+    [
+        ("Party Mode", "PARTY"),
+        ("Caribbean", "CARIB"),
+        ("Sunset", "SSET"),
+        ("Romance", "ROMAN"),
+        ("American", "AMERCA"),
+        ("Royal", "ROYAL"),
+        ("White", "WHITER"),
+        ("Red", "REDR"),
+        ("Blue", "BLUER"),
+        ("Green", "GREENR"),
+        ("Magenta", "MAGNTAR"),
+    ],
+)
+async def test_light_turn_on_with_each_effect(
+    hass: HomeAssistant,
+    pool_object_light: PoolObject,
+    effect_name: str,
+    expected_code: str,
+) -> None:
+    """Test turning on light with each effect sends correct code."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+
+    mock_controller = MagicMock()
+    mock_controller.requestChanges = AsyncMock()
+
+    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+
+    await hass.async_block_till_done()
+    await light.async_turn_on(**{ATTR_EFFECT: effect_name})
+
+    # Verify the correct effect code was sent
+    mock_controller.requestChanges.assert_called_once()
+    args = mock_controller.requestChanges.call_args[0]
+    assert args[0] == "LIGHT1"
+    assert args[1][ACT_ATTR] == expected_code
+    assert args[1][STATUS_ATTR] == "ON"
+
+
+@pytest.mark.parametrize(
+    "effect_code",
+    ["PARTY", "CARIB", "SSET", "ROMAN", "AMERCA", "ROYAL", "WHITER", "REDR", "BLUER", "GREENR", "MAGNTAR"],
+)
+async def test_light_state_update_with_each_effect(
+    hass: HomeAssistant,
+    pool_object_light: PoolObject,
+    effect_code: str,
+) -> None:
+    """Test light state updates correctly for each effect code."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+    mock_controller = MagicMock()
+
+    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+
+    # Simulate IntelliCenter update with this effect
+    updates = {
+        "LIGHT1": {
+            STATUS_ATTR: "ON",
+            "USE": effect_code,
+        }
+    }
+
+    # Verify entity recognizes the update
+    assert light.isUpdated(updates) is True
+
+    # Apply update
+    pool_object_light.update(updates["LIGHT1"])
+
+    # Verify effect is correctly reported
+    assert light.is_on is True
+    assert light.effect == LIGHTS_EFFECTS[effect_code]
+
+
+async def test_light_invalid_effect_ignored(
+    hass: HomeAssistant,
+    pool_object_light: PoolObject,
+) -> None:
+    """Test that invalid effect is ignored when turning on."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+
+    mock_controller = MagicMock()
+    mock_controller.requestChanges = AsyncMock()
+
+    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+
+    await hass.async_block_till_done()
+    await light.async_turn_on(**{ATTR_EFFECT: "Invalid Effect"})
+
+    # Should still turn on, but without ACT_ATTR since effect is invalid
+    mock_controller.requestChanges.assert_called_once()
+    args = mock_controller.requestChanges.call_args[0]
+    assert args[0] == "LIGHT1"
+    assert args[1][STATUS_ATTR] == "ON"
+    # ACT_ATTR should NOT be present for invalid effect
+    assert ACT_ATTR not in args[1]
+
+
+async def test_light_unknown_effect_code_returns_none(
+    hass: HomeAssistant,
+    pool_object_light: PoolObject,
+) -> None:
+    """Test that unknown effect code returns None for effect property."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+    mock_controller = MagicMock()
+
+    # Set light to use an unknown effect code
+    pool_object_light.update({"USE": "UNKNOWN"})
+
+    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+
+    # Effect should be None for unknown codes
+    assert light.effect is None

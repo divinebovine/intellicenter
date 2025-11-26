@@ -11,11 +11,17 @@ Pentair IntelliCenter pool control systems. It handles:
 import asyncio
 import json
 import logging
-from queue import SimpleQueue
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from .controller import BaseController
+
+# Maximum number of requests that can be queued to prevent memory exhaustion
+MAX_QUEUE_SIZE = 100
+
+# Maximum size of the message buffer in bytes (1MB)
+# Prevents DoS via malformed messages without delimiters
+MAX_BUFFER_SIZE = 1_000_000
 
 _LOGGER = logging.getLogger(__name__)
 # _LOGGER.setLevel(logging.DEBUG)
@@ -30,6 +36,7 @@ HEARTBEAT_INTERVAL = 30  # Check connection health every 30 seconds
 FLOW_CONTROL_TIMEOUT = 45  # Reset flow control if stuck for 45 seconds
 KEEPALIVE_INTERVAL = 90  # Send keepalive query every 90 seconds
 CONNECTION_IDLE_TIMEOUT = 300  # Close connection if no data received for 5 minutes (should never happen with keepalives)
+MAX_MISSED_KEEPALIVES = 3  # Close connection after this many missed keepalive responses
 
 
 class ICProtocol(asyncio.Protocol):
@@ -70,10 +77,12 @@ class ICProtocol(asyncio.Protocol):
         # Flow control state: ensures only one request is on the wire at a time
         # IntelliCenter struggles to parse concurrent requests, so we queue them
         # _out_pending: count of requests sent but not yet responded to
-        # _out_queue: queue of requests waiting to be sent
+        # _out_queue: asyncio queue of requests waiting to be sent (bounded to prevent memory exhaustion)
+        # _flow_control_lock: ensures atomic flow control operations
         self._out_pending: int = 0
-        self._out_queue: SimpleQueue[str] = SimpleQueue()
+        self._out_queue: asyncio.Queue[str] = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         self._last_flow_control_activity: float | None = None
+        self._flow_control_lock = asyncio.Lock()
 
         # Track last data received time for connection health monitoring
         # Used to detect idle connections and trigger reconnection
@@ -83,9 +92,15 @@ class ICProtocol(asyncio.Protocol):
         # We send periodic queries to keep the connection alive
         self._last_keepalive_sent: float | None = None
 
+        # Track keepalive message ID for response validation
+        # Ensures we receive responses to our keepalive queries
+        self._pending_keepalive_id: str | None = None
+        self._keepalive_response_pending: bool = False
+        self._missed_keepalive_responses: int = 0
+
         # heartbeat task for monitoring connection health
         # Runs periodically to send keepalives and detect deadlocks
-        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         """Handle the callback for a successful connection.
@@ -97,7 +112,9 @@ class ICProtocol(asyncio.Protocol):
             transport: The transport instance for this connection.
         """
 
-        self._transport = transport  # type: ignore[assignment]
+        # Cast BaseTransport to Transport - we know it's a TCP transport
+        # since we're using create_connection() with TCP protocol
+        self._transport = cast(asyncio.Transport, transport)
         self._msgID = 1
         current_time = asyncio.get_event_loop().time()
         self._last_flow_control_activity = current_time
@@ -108,7 +125,7 @@ class ICProtocol(asyncio.Protocol):
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
         # and notify our controller that we are ready!
-        self._controller.connection_made(self, transport)
+        self._controller.connection_made(self, self._transport)
 
     def connection_lost(self, exc: Exception | None) -> None:
         """Handle the callback for connection lost.
@@ -122,12 +139,27 @@ class ICProtocol(asyncio.Protocol):
                 if the connection was closed normally.
         """
 
-        # Cancel the heartbeat task
+        # Cancel the heartbeat task and schedule proper cleanup
         if self._heartbeat_task and not self._heartbeat_task.done():
             self._heartbeat_task.cancel()
+            # Schedule task cleanup to properly await cancellation
+            asyncio.create_task(self._cleanup_heartbeat_task(self._heartbeat_task))
             self._heartbeat_task = None
 
         self._controller.connection_lost(exc)
+
+    async def _cleanup_heartbeat_task(self, task: asyncio.Task[None]) -> None:
+        """Clean up a cancelled heartbeat task.
+
+        Args:
+            task: The cancelled task to clean up.
+        """
+        try:
+            await task
+        except asyncio.CancelledError:
+            _LOGGER.debug("PROTOCOL: heartbeat task cleanup completed")
+        except Exception as err:  # noqa: BLE001 - Cleanup must not crash
+            _LOGGER.debug(f"PROTOCOL: heartbeat task cleanup error: {err}")
 
     def data_received(self, data: bytes) -> None:
         """Handle the callback for data received.
@@ -147,12 +179,31 @@ class ICProtocol(asyncio.Protocol):
         # Update last data received timestamp for connection health monitoring
         self._last_data_received = asyncio.get_event_loop().time()
 
-        decoded_data = data.decode()
+        try:
+            decoded_data = data.decode("utf-8")
+        except UnicodeDecodeError as err:
+            _LOGGER.error(f"PROTOCOL: failed to decode data as UTF-8: {err}")
+            # Close connection to trigger reconnection with clean state
+            if self._transport:
+                self._transport.close()
+            return
+
         _LOGGER.debug(f"PROTOCOL: received from transport: {decoded_data}")
 
         # "packets" from Pentair are organized by lines (terminated with \r\n)
         # so wait until at least a full line is received
         self._lineBuffer += decoded_data
+
+        # Check buffer size limit to prevent DoS via large malformed messages
+        if len(self._lineBuffer) > MAX_BUFFER_SIZE:
+            _LOGGER.error(
+                f"PROTOCOL: message buffer exceeded maximum size "
+                f"({len(self._lineBuffer)} > {MAX_BUFFER_SIZE}) - closing connection"
+            )
+            if self._transport:
+                self._transport.close()
+            self._lineBuffer = ""
+            return
 
         # If we don't have a complete message yet, wait for more data
         if not self._lineBuffer.endswith("\r\n"):
@@ -219,6 +270,11 @@ class ICProtocol(asyncio.Protocol):
         Flow control prevents overwhelming the IntelliCenter and ensures
         reliable message delivery.
 
+        Note: Flow control is implemented atomically by incrementing
+        _out_pending BEFORE writing to transport. This ensures that even
+        if called from multiple coroutines, only one request is on the
+        wire at a time.
+
         Args:
             request: The JSON request string to send.
         """
@@ -227,17 +283,27 @@ class ICProtocol(asyncio.Protocol):
         # so we throttle back to one request on the wire at a time
         # see responseReceived() for the other side of the flow control
 
-        if self._out_pending == 0:
-            # Nothing in progress, we can transmit the packet immediately
+        # CRITICAL: Increment _out_pending BEFORE checking/writing to prevent
+        # race conditions where multiple coroutines could check _out_pending == 0
+        # simultaneously and both write to the transport.
+        self._out_pending += 1
+        self._last_flow_control_activity = asyncio.get_event_loop().time()
+
+        if self._out_pending == 1:
+            # Nothing else was in progress, we can transmit immediately
             self._writeToTransport(request)
         else:
             # There is already something on the wire, queue the request
             # It will be sent when we receive the next response
-            self._out_queue.put(request)
-
-        # Count the new request as pending (whether queued or sent)
-        self._out_pending += 1
-        self._last_flow_control_activity = asyncio.get_event_loop().time()
+            try:
+                self._out_queue.put_nowait(request)
+            except asyncio.QueueFull:
+                # Undo the increment since we're not actually queuing
+                self._out_pending -= 1
+                _LOGGER.warning(
+                    f"PROTOCOL: request queue full ({MAX_QUEUE_SIZE} pending) - "
+                    "dropping request to prevent memory exhaustion"
+                )
 
     def responseReceived(self) -> None:
         """Handle flow control when a response is received.
@@ -253,7 +319,7 @@ class ICProtocol(asyncio.Protocol):
         # We know that a response has been received, so if we have a
         # pending request in the queue, we can write it to our transport
         if not self._out_queue.empty():
-            request = self._out_queue.get()
+            request = self._out_queue.get_nowait()
             self._writeToTransport(request)
 
         # No matter what, we have now one less request pending
@@ -307,6 +373,17 @@ class ICProtocol(asyncio.Protocol):
             if response:
                 self.responseReceived()
 
+            # Check if this is a keepalive response
+            if (
+                self._pending_keepalive_id
+                and msg_id == self._pending_keepalive_id
+                and response == "200"
+            ):
+                _LOGGER.debug("PROTOCOL: keepalive response received")
+                self._keepalive_response_pending = False
+                self._missed_keepalive_responses = 0
+                self._pending_keepalive_id = None
+
             # Pass the message to the controller for semantic processing
             # The controller will handle command-specific logic
             self._controller.receivedMessage(msg_id, command, response, msg)
@@ -319,7 +396,7 @@ class ICProtocol(asyncio.Protocol):
             _LOGGER.error(
                 f"PROTOCOL: message missing required field {err}: {message[:100]}"
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - Protocol callback must not crash
             # Unexpected error - close connection to trigger reconnection
             _LOGGER.error(
                 f"PROTOCOL: unexpected exception while receiving message: {err}",
@@ -364,6 +441,22 @@ class ICProtocol(asyncio.Protocol):
 
                 current_time = asyncio.get_event_loop().time()
 
+                # Check for missed keepalive responses
+                if self._keepalive_response_pending:
+                    self._missed_keepalive_responses += 1
+                    _LOGGER.warning(
+                        f"PROTOCOL: keepalive response not received "
+                        f"(missed: {self._missed_keepalive_responses}/{MAX_MISSED_KEEPALIVES})"
+                    )
+                    if self._missed_keepalive_responses >= MAX_MISSED_KEEPALIVES:
+                        _LOGGER.error(
+                            f"PROTOCOL: {MAX_MISSED_KEEPALIVES} consecutive "
+                            "keepalive responses missed - closing connection"
+                        )
+                        if self._transport:
+                            self._transport.close()
+                        break
+
                 # Send keepalive query if needed
                 if self._last_keepalive_sent:
                     time_since_keepalive = current_time - self._last_keepalive_sent
@@ -374,7 +467,7 @@ class ICProtocol(asyncio.Protocol):
                         # Send a lightweight query to keep the connection alive
                         # Query the SYSTEM object's MODE attribute (always exists)
                         try:
-                            self.sendCmd(
+                            keepalive_id = self.sendCmd(
                                 "GetParamList",
                                 {
                                     "condition": "OBJTYP=SYSTEM",
@@ -383,8 +476,10 @@ class ICProtocol(asyncio.Protocol):
                                     ],
                                 },
                             )
+                            self._pending_keepalive_id = keepalive_id
+                            self._keepalive_response_pending = True
                             self._last_keepalive_sent = current_time
-                        except Exception as err:
+                        except (RuntimeError, ConnectionError) as err:
                             _LOGGER.debug(f"PROTOCOL: keepalive query failed: {err}")
 
                 # Check for flow control deadlock
@@ -396,18 +491,22 @@ class ICProtocol(asyncio.Protocol):
                         self._out_pending > 0
                         and time_since_activity > FLOW_CONTROL_TIMEOUT
                     ):
-                        _LOGGER.warning(
-                            f"PROTOCOL: flow control deadlock detected "
-                            f"({self._out_pending} pending, {time_since_activity:.1f}s since activity) - resetting"
-                        )
-                        # Reset flow control state
-                        self._out_pending = 0
-                        # Clear the queue
+                        # Count dropped messages for logging
+                        dropped_count = 0
                         while not self._out_queue.empty():
                             try:
                                 self._out_queue.get_nowait()
-                            except Exception:
+                                dropped_count += 1
+                            except asyncio.QueueEmpty:
                                 break
+
+                        _LOGGER.warning(
+                            f"PROTOCOL: flow control deadlock detected "
+                            f"({self._out_pending} pending, {dropped_count} queued, "
+                            f"{time_since_activity:.1f}s since activity) - resetting"
+                        )
+                        # Reset flow control state
+                        self._out_pending = 0
 
                 # Check for connection idle timeout (no data received)
                 if self._last_data_received:
@@ -423,5 +522,5 @@ class ICProtocol(asyncio.Protocol):
 
         except asyncio.CancelledError:
             _LOGGER.debug("PROTOCOL: heartbeat task cancelled")
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - Background task must not crash
             _LOGGER.error(f"PROTOCOL: heartbeat loop error: {err}", exc_info=True)

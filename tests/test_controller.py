@@ -9,7 +9,9 @@ from custom_components.intellicenter.pyintellicenter.controller import (
     BaseController,
     CommandError,
     ConnectionHandler,
+    ConnectionMetrics,
     ModelController,
+    PendingRequest,
     SystemInfo,
     prune,
 )
@@ -84,7 +86,9 @@ class TestSystemInfo:
         assert info.swVersion == "1.0.5"
         assert info.usesMetric is True
         assert info.uniqueID is not None
-        assert len(info.uniqueID) == 16  # blake2b with digest_size=8 produces 16 hex chars
+        assert (
+            len(info.uniqueID) == 16
+        )  # blake2b with digest_size=8 produces 16 hex chars
 
     def test_uses_english(self):
         """Test system using English units."""
@@ -172,7 +176,7 @@ class TestBaseController:
             nonlocal callback_called
             callback_called = True
 
-        controller._diconnectedCallback = disconnect_callback
+        controller._disconnected_callback = disconnect_callback
 
         controller.connection_lost(None)
 
@@ -180,11 +184,14 @@ class TestBaseController:
 
     def test_stop(self, controller):
         """Test stopping controller."""
-        # Create mock transport and pending requests
+        # Create mock transport and pending requests using PendingRequest
         controller._transport = Mock()
         future1 = asyncio.Future()
         future2 = asyncio.Future()
-        controller._requests = {"1": future1, "2": future2}
+        controller._requests = {
+            "1": PendingRequest(future=future1),
+            "2": PendingRequest(future=future2),
+        }
 
         controller.stop()
 
@@ -212,7 +219,8 @@ class TestBaseController:
         future = controller.sendCmd("GetParamList", waitForResponse=False)
 
         assert future is None
-        assert controller._requests["1"] is None
+        # PendingRequest is created with future=None
+        assert controller._requests["1"].future is None
 
     async def test_sendCmd_disconnected(self, controller):
         """Test sendCmd when disconnected."""
@@ -226,7 +234,7 @@ class TestBaseController:
     def test_receivedMessage_sets_result(self, controller):
         """Test receivedMessage sets future result."""
         future = asyncio.Future()
-        controller._requests = {"1": future}
+        controller._requests = {"1": PendingRequest(future=future)}
 
         msg = {"response": "200", "data": "test"}
         controller.receivedMessage("1", "Test", "200", msg)
@@ -238,7 +246,7 @@ class TestBaseController:
     def test_receivedMessage_sets_exception(self, controller):
         """Test receivedMessage sets exception on error."""
         future = asyncio.Future()
-        controller._requests = {"1": future}
+        controller._requests = {"1": PendingRequest(future=future)}
 
         msg = {"response": "400"}
         controller.receivedMessage("1", "Test", "400", msg)
@@ -414,3 +422,119 @@ class TestConnectionHandler:
         assert delay1 == 15  # 10 * 1.5
         assert delay2 == 22  # 15 * 1.5 (rounded)
         assert delay3 == 33  # 22 * 1.5 (rounded)
+
+
+class TestConnectionMetrics:
+    """Test ConnectionMetrics dataclass."""
+
+    def test_init_defaults(self):
+        """Test ConnectionMetrics default values."""
+        metrics = ConnectionMetrics()
+
+        assert metrics.requests_sent == 0
+        assert metrics.requests_completed == 0
+        assert metrics.requests_failed == 0
+        assert metrics.requests_timed_out == 0
+        assert metrics.requests_dropped == 0
+        assert metrics.reconnect_attempts == 0
+        assert metrics.successful_connects == 0
+        assert metrics.last_request_time == 0.0
+        assert metrics.last_response_time == 0.0
+        assert metrics.total_response_time == 0.0
+
+    def test_average_response_time_zero_requests(self):
+        """Test average response time with no completed requests."""
+        metrics = ConnectionMetrics()
+
+        assert metrics.average_response_time == 0.0
+
+    def test_average_response_time_with_requests(self):
+        """Test average response time calculation."""
+        metrics = ConnectionMetrics()
+        metrics.requests_completed = 10
+        metrics.total_response_time = 5.0
+
+        assert metrics.average_response_time == 0.5
+
+    def test_to_dict(self):
+        """Test to_dict method."""
+        metrics = ConnectionMetrics()
+        metrics.requests_sent = 100
+        metrics.requests_completed = 95
+        metrics.requests_failed = 3
+        metrics.requests_timed_out = 2
+        metrics.reconnect_attempts = 5
+        metrics.successful_connects = 10
+        metrics.total_response_time = 47.5
+
+        result = metrics.to_dict()
+
+        assert result["requests_sent"] == 100
+        assert result["requests_completed"] == 95
+        assert result["requests_failed"] == 3
+        assert result["requests_timed_out"] == 2
+        assert result["reconnect_attempts"] == 5
+        assert result["successful_connects"] == 10
+        assert result["average_response_time_ms"] == 500.0  # 47.5/95 * 1000
+
+    def test_metrics_in_base_controller(self):
+        """Test that BaseController has metrics property."""
+        loop = asyncio.get_event_loop()
+        controller = BaseController("192.168.1.100", 6681, loop)
+
+        assert controller.metrics is not None
+        assert isinstance(controller.metrics, ConnectionMetrics)
+
+    def test_successful_connects_incremented_on_connection(self):
+        """Test successful_connects is incremented on connection_made."""
+        loop = asyncio.get_event_loop()
+        controller = BaseController("192.168.1.100", 6681, loop)
+
+        initial_connects = controller.metrics.successful_connects
+
+        # Simulate protocol connection
+        mock_transport = Mock()
+        mock_transport.write = Mock()
+        mock_transport.close = Mock()
+        mock_transport.is_closing = Mock(return_value=False)
+
+        controller.connection_made(controller._protocol, mock_transport)
+
+        assert controller.metrics.successful_connects == initial_connects + 1
+
+        # Cleanup
+        controller.connection_lost(None)
+
+
+class TestPendingRequest:
+    """Test PendingRequest class."""
+
+    def test_init(self):
+        """Test PendingRequest initialization."""
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+
+        request = PendingRequest(future=future)
+
+        assert request.future is future
+        assert request.created_at > 0
+
+    def test_created_at_timestamp(self):
+        """Test PendingRequest has valid creation timestamp."""
+        import time
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+
+        before = time.monotonic()
+        request = PendingRequest(future=future)
+        after = time.monotonic()
+
+        assert before <= request.created_at <= after
+
+    def test_with_none_future(self):
+        """Test PendingRequest with None future."""
+        request = PendingRequest(future=None)
+
+        assert request.future is None
+        assert request.created_at > 0

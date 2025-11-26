@@ -1,6 +1,11 @@
-"""Pentair Intellicenter lights."""
+"""Pentair Intellicenter lights.
 
-from functools import reduce
+This module provides light entities for pool lights and light shows.
+Supports color effects for IntelliBrite, MagicStream, and GloBrite lights.
+"""
+
+from __future__ import annotations
+
 import logging
 from typing import Any, ClassVar
 
@@ -12,9 +17,9 @@ from homeassistant.components.light import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import PoolEntity
-from .const import DOMAIN
+from . import PoolEntity, get_controller
 from .pyintellicenter import (
     ACT_ATTR,
     CIRCUIT_ATTR,
@@ -26,7 +31,8 @@ from .pyintellicenter import (
 
 _LOGGER = logging.getLogger(__name__)
 
-LIGHTS_EFFECTS = {
+# Mapping of IntelliCenter color codes to human-readable effect names
+LIGHTS_EFFECTS: dict[str, str] = {
     "PARTY": "Party Mode",
     "CARIB": "Caribbean",
     "SSET": "Sunset",
@@ -42,13 +48,14 @@ LIGHTS_EFFECTS = {
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
-):
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Load pool lights based on a config entry."""
+    controller = get_controller(hass, entry)
 
-    controller: ModelController = hass.data[DOMAIN][entry.entry_id].controller
-
-    lights = []
+    lights: list[PoolLight] = []
 
     obj: PoolObject
     for obj in controller.model.objectList:
@@ -62,28 +69,31 @@ async def async_setup_entry(
                 )
             )
         elif obj.isALightShow:
-            supportColorEffects = reduce(
-                lambda x, y: x and y,
-                (
-                    controller.model[obj[CIRCUIT_ATTR]].supportColorEffects
-                    for obj in controller.model.getChildren(obj)
-                ),
-                True,
+            # Check if all child lights support color effects
+            children = controller.model.getChildren(obj)
+            supports_color = all(
+                circuit_obj.supportColorEffects
+                for child in children
+                if (circuit_obj := controller.model[child[CIRCUIT_ATTR]]) is not None
             )
             lights.append(
                 PoolLight(
                     entry,
                     controller,
                     obj,
-                    LIGHTS_EFFECTS if supportColorEffects else None,
+                    LIGHTS_EFFECTS if supports_color else None,
                 )
             )
 
     async_add_entities(lights)
 
 
-class PoolLight(PoolEntity, LightEntity):
-    """Representation of an Pentair light."""
+class PoolLight(PoolEntity, LightEntity):  # type: ignore[misc]
+    """Representation of a Pentair light.
+
+    Supports basic on/off control and color effects for compatible lights
+    (IntelliBrite, MagicStream, GloBrite).
+    """
 
     _attr_color_mode = ColorMode.ONOFF
     _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.ONOFF}
@@ -94,30 +104,42 @@ class PoolLight(PoolEntity, LightEntity):
         entry: ConfigEntry,
         controller: ModelController,
         poolObject: PoolObject,
-        colorEffects: dict | None = None,
-    ):
-        """Initialize."""
+        colorEffects: dict[str, str] | None = None,
+    ) -> None:
+        """Initialize a pool light.
+
+        Args:
+            entry: The config entry for this integration
+            controller: The ModelController managing the connection
+            poolObject: The PoolObject this light represents
+            colorEffects: Optional mapping of IntelliCenter codes to effect names
+        """
         super().__init__(entry, controller, poolObject)
         # USE appears to contain extra info like color...
-        self._extra_state_attributes = [USE_ATTR]
+        self._extra_state_attributes = {USE_ATTR}
 
         self._lightEffects = colorEffects
-        self._reversedLightEffects = (
-            dict(map(reversed, colorEffects.items())) if colorEffects else None
+        self._reversedLightEffects: dict[str, str] | None = (
+            {v: k for k, v in colorEffects.items()} if colorEffects else None
         )
 
         if self._lightEffects:
             self._attr_supported_features |= LightEntityFeature.EFFECT
 
     @property
-    def effect_list(self) -> list:
+    def effect_list(self) -> list[str] | None:
         """Return the list of supported effects."""
+        if self._reversedLightEffects is None:
+            return None
         return list(self._reversedLightEffects.keys())
 
     @property
-    def effect(self) -> str:
+    def effect(self) -> str | None:
         """Return the current effect."""
-        return self._lightEffects.get(self._poolObject[USE_ATTR])
+        if self._lightEffects is None:
+            return None
+        use_value = self._poolObject[USE_ATTR]
+        return self._lightEffects.get(use_value) if use_value else None
 
     @property
     def is_on(self) -> bool:
@@ -130,10 +152,9 @@ class PoolLight(PoolEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
+        changes: dict[str, Any] = {STATUS_ATTR: self._poolObject.onStatus}
 
-        changes = {STATUS_ATTR: self._poolObject.onStatus}
-
-        if ATTR_EFFECT in kwargs:
+        if ATTR_EFFECT in kwargs and self._reversedLightEffects:
             effect = kwargs[ATTR_EFFECT]
             new_use = self._reversedLightEffects.get(effect)
             if new_use:
@@ -141,9 +162,7 @@ class PoolLight(PoolEntity, LightEntity):
 
         self.requestChanges(changes)
 
-    def isUpdated(self, updates: dict[str, dict[str, str]]) -> bool:
-        """Return true if the entity is updated by the updates from Intellicenter."""
-
-        myUpdates = updates.get(self._poolObject.objnam, {})
-
-        return bool(myUpdates and ({STATUS_ATTR, USE_ATTR} & myUpdates.keys()))
+    def isUpdated(self, updates: dict[str, dict[str, Any]]) -> bool:
+        """Return true if the entity is updated by the updates from IntelliCenter."""
+        my_updates = updates.get(self._poolObject.objnam, {})
+        return bool(my_updates and ({STATUS_ATTR, USE_ATTR} & my_updates.keys()))

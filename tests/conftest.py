@@ -180,13 +180,16 @@ def pool_model_data() -> list[dict[str, Any]]:
                 "SUBTYP": "GAS",
                 "SNAME": "Gas Heater",
                 "STATUS": "OFF",
+                "BODY": "POOL1 SPA01",
+                "LISTORD": "1",
             },
         },
-        # Chemistry sensor
+        # Chemistry sensor (IntelliChem)
         {
             "objnam": "CHEM1",
             "params": {
                 "OBJTYP": CHEM_TYPE,
+                "SUBTYP": "ICHEM",
                 "SNAME": "IntelliChem",
                 "PHVAL": "7.4",
                 "ORPVAL": "650",
@@ -201,7 +204,7 @@ def pool_model_data() -> list[dict[str, Any]]:
                 "OBJTYP": SENSE_TYPE,
                 "SUBTYP": "AIR",
                 "SNAME": "Air Temp",
-                "STATUS": "68",
+                "SOURCE": "68",
             },
         },
         # Schedule
