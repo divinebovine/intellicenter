@@ -315,7 +315,7 @@ The integration has achieved **Platinum** quality scale (v3.0.0). The roadmap be
 
 ### Development Achievements
 
-**Platinum Quality Scale Status**: ✅ **ACHIEVED** (v3.0.0+)
+**Platinum Quality Scale Status**: ✅ **ACHIEVED** (v3.1.0+)
 
 The integration now meets ALL Platinum quality requirements:
 1. ✅ **Bronze**: Automated test suite with 257 tests
@@ -337,6 +337,7 @@ The integration now meets ALL Platinum quality requirements:
 - **Code Quality**: Automated linting and formatting with ruff
 - **Production Hardening**: Circuit breaker, connection metrics, health monitoring
 - **User Configuration**: Options flow for keepalive and reconnect settings
+- **Modular Architecture**: Protocol layer extracted to standalone [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) package
 
 ## Caveats and Limitations
 

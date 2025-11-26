@@ -312,15 +312,47 @@ automation:
 - **Unit Changes**: Changing between metric/imperial while integration is running may cause temporary incorrect values. Reload the integration after unit changes.
 - **Configuration Changes**: Reload the integration after making significant changes to your pool configuration on the IntelliCenter.
 
+## Architecture
+
+This integration uses the [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) library for protocol communication:
+
+- **pyintellicenter**: Standalone Python library handling TCP protocol, connection management, and pool equipment model
+- **intellicenter**: Home Assistant integration that creates entities and bridges HA with pyintellicenter
+
 ## Development & Contributing
+
+### Prerequisites
+
+```bash
+# Clone repository
+git clone https://github.com/joyfulhouse/intellicenter.git
+cd intellicenter
+
+# Install dependencies (uses pyintellicenter from PyPI)
+uv sync
+```
+
+### Development with Local pyintellicenter
+
+For developing both packages simultaneously:
+
+```bash
+git clone https://github.com/joyfulhouse/pyintellicenter.git ../pyintellicenter
+uv pip install -e ../pyintellicenter
+```
+
+### Testing
+
+```bash
+uv run pytest                    # Run all tests
+uv run pytest --cov              # With coverage
+uv run ruff check --fix          # Lint and fix
+uv run ruff format               # Format code
+```
 
 See [VALIDATION.md](VALIDATION.md) for development setup and testing guidelines.
 
-Contributions welcome! Please ensure all tests pass before submitting PRs:
-
-```bash
-make bronze  # Run all quality checks
-```
+Contributions welcome! Please ensure all tests pass before submitting PRs.
 
 ## Support
 
