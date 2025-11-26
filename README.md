@@ -1,4 +1,4 @@
-# Pentair IntelliCenter for Home Assistant
+# 🏊 Pentair IntelliCenter for Home Assistant
 
 [![HACS Custom][hacsbadge]][hacs]
 [![GitHub Release][releases-shield]][releases]
@@ -13,23 +13,23 @@ A Home Assistant custom integration for **Pentair IntelliCenter** pool control s
   <img src="entities.png" width="400" alt="Entities"/>
 </p>
 
-## Highlights
+## ✨ Highlights
 
-- **100% Local** - Direct TCP connection to your IntelliCenter. No cloud, no internet required.
-- **Real-time Updates** - Push-based notifications for instant state changes.
-- **Zero Configuration** - Automatic discovery via Zeroconf/mDNS.
-- **Reliable** - Automatic reconnection with exponential backoff if connection drops.
-- **Comprehensive** - Supports pools, spas, lights, pumps, heaters, chemistry, schedules, and more.
+- 🏠 **100% Local** — Direct TCP connection to your IntelliCenter. No cloud, no internet required.
+- ⚡ **Real-time Updates** — Push-based notifications for instant state changes.
+- 🔍 **Zero Configuration** — Automatic discovery via Zeroconf/mDNS.
+- 🔄 **Reliable** — Automatic reconnection with exponential backoff if connection drops.
+- 🎛️ **Comprehensive** — Supports pools, spas, lights, pumps, heaters, chemistry, schedules, and more.
 
-## Requirements
+## 📋 Requirements
 
 | Requirement | Details |
 |-------------|---------|
-| Home Assistant | 2023.1 or newer |
-| IntelliCenter | i5P, i7P, i9P, or i10P |
-| Network | Local network access (TCP port 6681) |
+| 🏠 Home Assistant | 2023.1 or newer |
+| 🎛️ IntelliCenter | i5P, i7P, i9P, or i10P |
+| 🌐 Network | Local network access (TCP port 6681) |
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Installation via HACS (Recommended)
 
@@ -45,9 +45,9 @@ A Home Assistant custom integration for **Pentair IntelliCenter** pool control s
 2. Copy `custom_components/intellicenter` to your `config/custom_components/` directory
 3. Restart Home Assistant
 
-## Configuration
+## ⚙️ Configuration
 
-### Automatic Discovery
+### 🔍 Automatic Discovery
 
 Your IntelliCenter is automatically discovered via Zeroconf:
 
@@ -55,7 +55,7 @@ Your IntelliCenter is automatically discovered via Zeroconf:
 2. Look for "Pentair IntelliCenter" under **Discovered**
 3. Click **Configure** and confirm
 
-### Manual Setup
+### 🔧 Manual Setup
 
 If discovery doesn't work:
 
@@ -64,38 +64,38 @@ If discovery doesn't work:
 3. Enter your IntelliCenter's IP address
 
 **Finding your IP address:**
-- Router's DHCP client list (look for "Pentair")
-- Pentair mobile app: **Settings** → **System Information**
-- IntelliCenter display panel
+- 📡 Router's DHCP client list (look for "Pentair")
+- 📱 Pentair mobile app: **Settings** → **System Information**
+- 🖥️ IntelliCenter display panel
 
-> **Tip:** Assign a static IP or DHCP reservation to prevent address changes.
+> 💡 **Tip:** Assign a static IP or DHCP reservation to prevent address changes.
 
-### Advanced Options
+### 🎚️ Advanced Options
 
 After setup, configure connection settings:
 
 1. **Settings** → **Devices & Services** → **IntelliCenter** → **Configure**
 2. Adjust:
-   - **Keepalive Interval** (30-300s, default 90) - Connection health check frequency
-   - **Reconnect Delay** (10-120s, default 30) - Initial retry delay after disconnect
+   - ⏱️ **Keepalive Interval** (30-300s, default 90) — Connection health check frequency
+   - 🔄 **Reconnect Delay** (10-120s, default 30) — Initial retry delay after disconnect
 
-## Supported Equipment
+## 🎛️ Supported Equipment
 
 | Category | Entity Type | Features |
 |----------|-------------|----------|
-| **Pool/Spa** | Switch, Sensors, Water Heater | On/off, temperature, heater control |
-| **Lights** | Light | On/off, color effects (IntelliBrite, MagicStream) |
-| **Light Shows** | Light | Coordinated multi-light effects |
-| **Circuits** | Switch | All "Featured" circuits (cleaner, blower, etc.) |
-| **Pumps** | Binary Sensor, Sensors | Running status, power (W), speed (RPM), flow (GPM) |
-| **Chemistry** | Sensors | pH, ORP, tank levels (IntelliChem) |
-| **Heaters** | Binary Sensor | Running status |
-| **Schedules** | Binary Sensor | Active status (disabled by default) |
-| **System** | Switch, Binary Sensor, Sensors | Vacation mode, freeze protection, temperatures |
+| 🏊 **Pool/Spa** | Switch, Sensors, Water Heater | On/off, temperature, heater control |
+| 💡 **Lights** | Light | On/off, color effects (IntelliBrite, MagicStream) |
+| 🌈 **Light Shows** | Light | Coordinated multi-light effects |
+| ⚡ **Circuits** | Switch | All "Featured" circuits (cleaner, blower, etc.) |
+| 🔄 **Pumps** | Binary Sensor, Sensors | Running status, power (W), speed (RPM), flow (GPM) |
+| 🧪 **Chemistry** | Sensors | pH, ORP, tank levels (IntelliChem) |
+| 🔥 **Heaters** | Binary Sensor | Running status |
+| 📅 **Schedules** | Binary Sensor | Active status (disabled by default) |
+| 🖥️ **System** | Switch, Binary Sensor, Sensors | Vacation mode, freeze protection, temperatures |
 
-## Automation Examples
+## 🤖 Automation Examples
 
-### Spa Ready at Sunset
+### 🌅 Spa Ready at Sunset
 
 ```yaml
 automation:
@@ -115,7 +115,7 @@ automation:
           temperature: 102
 ```
 
-### Pool Party Lights
+### 🎉 Pool Party Lights
 
 ```yaml
 automation:
@@ -132,7 +132,7 @@ automation:
           effect: "Party"
 ```
 
-### Freeze Protection Alert
+### 🥶 Freeze Protection Alert
 
 ```yaml
 automation:
@@ -144,14 +144,14 @@ automation:
     action:
       - service: notify.mobile_app
         data:
-          title: "Pool Alert"
-          message: "Freeze protection activated!"
+          title: "🏊 Pool Alert"
+          message: "❄️ Freeze protection activated!"
 ```
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 <details>
-<summary><strong>Integration Not Discovered</strong></summary>
+<summary><strong>🔍 Integration Not Discovered</strong></summary>
 
 1. Ensure Home Assistant and IntelliCenter are on the same network/VLAN
 2. Check that mDNS/multicast traffic isn't blocked
@@ -159,7 +159,7 @@ automation:
 </details>
 
 <details>
-<summary><strong>Connection Failed</strong></summary>
+<summary><strong>❌ Connection Failed</strong></summary>
 
 1. Verify the IP address is correct
 2. Ensure TCP port 6681 is accessible: `telnet <ip> 6681`
@@ -168,7 +168,7 @@ automation:
 </details>
 
 <details>
-<summary><strong>Entities Unavailable</strong></summary>
+<summary><strong>⚠️ Entities Unavailable</strong></summary>
 
 1. Check connection status in **Settings** → **Devices & Services**
 2. Review logs: **Settings** → **System** → **Logs**
@@ -177,7 +177,7 @@ automation:
 </details>
 
 <details>
-<summary><strong>Enable Debug Logging</strong></summary>
+<summary><strong>🐛 Enable Debug Logging</strong></summary>
 
 Add to `configuration.yaml`:
 
@@ -189,18 +189,18 @@ logger:
 ```
 </details>
 
-## Architecture
+## 🏗️ Architecture
 
 This integration is built on two packages:
 
 | Package | Description |
 |---------|-------------|
-| [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) | Standalone Python library for IntelliCenter protocol |
-| intellicenter | Home Assistant integration using pyintellicenter |
+| 📦 [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) | Standalone Python library for IntelliCenter protocol |
+| 🏠 intellicenter | Home Assistant integration using pyintellicenter |
 
 The separation allows the protocol library to be used in other projects and simplifies testing.
 
-## Development
+## 👨‍💻 Development
 
 ```bash
 # Clone and setup
@@ -213,48 +213,50 @@ git clone https://github.com/joyfulhouse/pyintellicenter.git ../pyintellicenter
 uv pip install -e ../pyintellicenter
 
 # Testing
-uv run pytest                    # Run tests
-uv run pytest --cov              # With coverage
-uv run ruff check --fix          # Lint
-uv run ruff format               # Format
+uv run pytest                    # 🧪 Run tests
+uv run pytest --cov              # 📊 With coverage
+uv run ruff check --fix          # 🔍 Lint
+uv run ruff format               # ✨ Format
 ```
 
 See [VALIDATION.md](VALIDATION.md) for full development guidelines.
 
-## Known Limitations
+## ⚠️ Known Limitations
 
-- **Equipment Coverage** - Tested primarily with standard configurations. Some equipment (covers, cascades, multiple heaters) may have limited testing.
-- **Unit Changes** - Reload integration after changing metric/imperial on IntelliCenter.
-- **Configuration Changes** - Reload integration after significant pool configuration changes.
+- 🔧 **Equipment Coverage** — Tested primarily with standard configurations. Some equipment (covers, cascades, multiple heaters) may have limited testing.
+- 🌡️ **Unit Changes** — Reload integration after changing metric/imperial on IntelliCenter.
+- ⚙️ **Configuration Changes** — Reload integration after significant pool configuration changes.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 This project builds upon the excellent work of:
 
-- **[@dwradcliffe](https://github.com/dwradcliffe)** - [Original intellicenter integration](https://github.com/dwradcliffe/intellicenter) that pioneered Home Assistant support for Pentair IntelliCenter systems
-- **[@jlvaillant](https://github.com/jlvaillant)** - [Enhanced fork](https://github.com/jlvaillant/intellicenter) with additional features and improvements
+- 🌟 **[@dwradcliffe](https://github.com/dwradcliffe)** — [Original intellicenter integration](https://github.com/dwradcliffe/intellicenter) that pioneered Home Assistant support for Pentair IntelliCenter systems
+- 🌟 **[@jlvaillant](https://github.com/jlvaillant)** — [Enhanced fork](https://github.com/jlvaillant/intellicenter) with additional features and improvements
 
-Thank you for your foundational work that made this integration possible!
+Thank you for your foundational work that made this integration possible! 💙
 
-## Contributing
+## 🤝 Contributing
 
 Contributions welcome! Please:
 
-1. Fork the repository
-2. Create a feature branch
-3. Ensure all tests pass (`uv run pytest`)
-4. Submit a pull request
+1. 🍴 Fork the repository
+2. 🌿 Create a feature branch
+3. ✅ Ensure all tests pass (`uv run pytest`)
+4. 📬 Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the Apache License 2.0 - see [LICENSE](LICENSE) for details.
+This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
-## Support
+## 💬 Support
 
-- **Issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)
 
 ---
+
+Made with ❤️ for the Home Assistant community
 
 [hacs]: https://github.com/hacs/integration
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange
