@@ -138,7 +138,7 @@ async def async_setup_entry(
                             entry,
                             controller,
                             obj,
-                            device_class=None,
+                            device_class=SensorDeviceClass.PH,
                             attribute_key=PHVAL_ATTR,
                             name="+ (pH)",
                         )

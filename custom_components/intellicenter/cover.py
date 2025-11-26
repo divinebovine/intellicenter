@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.cover import (
+    CoverDeviceClass,
     CoverEntity,
     CoverEntityFeature,
 )
@@ -53,6 +54,8 @@ async def async_setup_entry(
 
 class PoolCover(PoolEntity, CoverEntity):  # type: ignore[misc]
     """Representation of a Pentair pool cover."""
+
+    _attr_device_class = CoverDeviceClass.SHADE
 
     def __init__(
         self,

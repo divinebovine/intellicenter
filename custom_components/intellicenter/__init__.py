@@ -30,7 +30,13 @@ from homeassistant.helpers.typing import ConfigType
 if TYPE_CHECKING:
     pass
 
-from .const import DOMAIN
+from .const import (
+    CONF_KEEPALIVE_INTERVAL,
+    CONF_RECONNECT_DELAY,
+    DEFAULT_KEEPALIVE_INTERVAL,
+    DEFAULT_RECONNECT_DELAY,
+    DOMAIN,
+)
 from .pyintellicenter import (
     ACT_ATTR,
     BODY_ATTR,
@@ -86,6 +92,82 @@ PLATFORMS = [
 # -------------------------------------------------------------------------------------
 
 
+class PoolConnectionHandler(ConnectionHandler):
+    """Connection handler with Home Assistant integration.
+
+    This class bridges the pyintellicenter ConnectionHandler with Home Assistant
+    by sending dispatcher signals when connection state changes or updates arrive.
+    Extracted to module level for better testability.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry_id: str,
+        controller: ModelController,
+        timeBetweenReconnects: int = 30,
+    ) -> None:
+        """Initialize the pool connection handler.
+
+        Args:
+            hass: The Home Assistant instance
+            entry_id: The config entry ID for signal namespacing
+            controller: The ModelController to manage
+            timeBetweenReconnects: Initial delay between reconnection attempts
+        """
+        super().__init__(controller, timeBetweenReconnects=timeBetweenReconnects)
+        self._hass = hass
+        self._entry_id = entry_id
+
+    @property
+    def update_signal(self) -> str:
+        """Return the signal name for entity updates."""
+        return f"{DOMAIN}_UPDATE_{self._entry_id}"
+
+    @property
+    def connection_signal(self) -> str:
+        """Return the signal name for connection state changes."""
+        return f"{DOMAIN}_CONNECTION_{self._entry_id}"
+
+    def started(self, controller: BaseController) -> None:
+        """Handle initial connection to the Pentair system."""
+        system_info = controller.systemInfo
+        prop_name = system_info.propName if system_info else "Unknown"
+        _LOGGER.info(f"connected to system: '{prop_name}'")
+
+        # Check for model attribute to access pool objects
+        if hasattr(controller, "model"):
+            for pool_obj in controller.model:
+                _LOGGER.debug(f"   loaded {pool_obj}")
+
+    @callback  # type: ignore[misc]
+    def reconnected(self, controller: BaseController) -> None:
+        """Handle reconnection to the Pentair system."""
+        system_info = controller.systemInfo
+        prop_name = system_info.propName if system_info else "Unknown"
+        _LOGGER.info(f"reconnected to system: '{prop_name}'")
+        dispatcher.async_dispatcher_send(self._hass, self.connection_signal, True)
+
+    @callback  # type: ignore[misc]
+    def disconnected(self, controller: BaseController, exc: Exception | None) -> None:
+        """Handle disconnection from the Pentair system."""
+        system_info = controller.systemInfo
+        prop_name = system_info.propName if system_info else "Unknown"
+        _LOGGER.info(f"disconnected from system: '{prop_name}'")
+        dispatcher.async_dispatcher_send(self._hass, self.connection_signal, False)
+
+    @callback  # type: ignore[misc]
+    def updated(
+        self, controller: ModelController, updates: dict[str, dict[str, Any]]
+    ) -> None:
+        """Handle updates from the Pentair system."""
+        _LOGGER.debug(f"received update for {len(updates)} pool objects")
+        dispatcher.async_dispatcher_send(self._hass, self.update_signal, updates)
+
+
+# -------------------------------------------------------------------------------------
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Pentair IntelliCenter Integration."""
     return True
@@ -93,6 +175,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up IntelliCenter integration from a config entry."""
+
+    # Get configuration options with defaults
+    keepalive_interval = entry.options.get(
+        CONF_KEEPALIVE_INTERVAL, DEFAULT_KEEPALIVE_INTERVAL
+    )
+    reconnect_delay = entry.options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
 
     attributes_map: dict[str, set[str]] = {
         BODY_TYPE: {
@@ -115,53 +203,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     model = PoolModel(attributes_map)
 
-    controller = ModelController(entry.data[CONF_HOST], model, loop=hass.loop)
-
-    class Handler(ConnectionHandler):
-        """Connection handler with Home Assistant integration."""
-
-        UPDATE_SIGNAL = DOMAIN + "_UPDATE_" + entry.entry_id
-        CONNECTION_SIGNAL = DOMAIN + "_CONNECTION_" + entry.entry_id
-
-        def started(self, controller: BaseController) -> None:
-            """Handle initial connection to the Pentair system."""
-            system_info = controller.systemInfo
-            prop_name = system_info.propName if system_info else "Unknown"
-            _LOGGER.info(f"connected to system: '{prop_name}'")
-
-            # Check for model attribute to access pool objects
-            if hasattr(controller, "model"):
-                for pool_obj in controller.model:
-                    _LOGGER.debug(f"   loaded {pool_obj}")
-
-        @callback  # type: ignore[misc]
-        def reconnected(self, controller: BaseController) -> None:
-            """Handle reconnection to the Pentair system."""
-            system_info = controller.systemInfo
-            prop_name = system_info.propName if system_info else "Unknown"
-            _LOGGER.info(f"reconnected to system: '{prop_name}'")
-            dispatcher.async_dispatcher_send(hass, self.CONNECTION_SIGNAL, True)
-
-        @callback  # type: ignore[misc]
-        def disconnected(
-            self, controller: BaseController, exc: Exception | None
-        ) -> None:
-            """Handle disconnection from the Pentair system."""
-            system_info = controller.systemInfo
-            prop_name = system_info.propName if system_info else "Unknown"
-            _LOGGER.info(f"disconnected from system: '{prop_name}'")
-            dispatcher.async_dispatcher_send(hass, self.CONNECTION_SIGNAL, False)
-
-        @callback  # type: ignore[misc]
-        def updated(
-            self, controller: ModelController, updates: dict[str, dict[str, Any]]
-        ) -> None:
-            """Handle updates from the Pentair system."""
-            _LOGGER.debug(f"received update for {len(updates)} pool objects")
-            dispatcher.async_dispatcher_send(hass, self.UPDATE_SIGNAL, updates)
+    controller = ModelController(
+        entry.data[CONF_HOST],
+        model,
+        loop=hass.loop,
+        keepalive_interval=keepalive_interval,
+    )
 
     try:
-        handler = Handler(controller)
+        handler = PoolConnectionHandler(
+            hass, entry.entry_id, controller, timeBetweenReconnects=reconnect_delay
+        )
 
         await handler.start()
 
@@ -184,6 +236,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "handler": handler,
             "stop_listener": stop_listener,
         }
+
+        # Register update listener for options changes
+        entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
         return True
     except ConnectionRefusedError as err:
@@ -568,9 +623,7 @@ class OnOffControlMixin:
     @property
     def is_on(self) -> bool:
         """Return true if the entity is on."""
-        return bool(
-            self._poolObject[self._attribute_key] == self._poolObject.onStatus
-        )
+        return bool(self._poolObject[self._attribute_key] == self._poolObject.onStatus)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""

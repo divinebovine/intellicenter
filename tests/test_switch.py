@@ -282,3 +282,20 @@ async def test_non_featured_circuit_not_created(
         if hasattr(e, "_poolObject") and e._poolObject.objnam == "CIRC02"
     ]
     assert len(circ02_switches) == 0
+
+
+async def test_switch_device_class(
+    hass: HomeAssistant,
+    pool_object_switch: PoolObject,
+) -> None:
+    """Test that switches have the correct device class."""
+    from homeassistant.components.switch import SwitchDeviceClass
+
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+
+    mock_controller = MagicMock()
+
+    circuit = PoolCircuit(entry, mock_controller, pool_object_switch)
+
+    assert circuit.device_class == SwitchDeviceClass.SWITCH

@@ -608,3 +608,34 @@ async def test_sensor_unique_id_with_attribute(
         attribute_key=GPM_ATTR,
     )
     assert gpm.unique_id == "test_entry_PUMP1GPM"
+
+
+async def test_ph_sensor_device_class(hass: HomeAssistant) -> None:
+    """Test that pH sensors have the correct device class."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+
+    mock_controller = MagicMock()
+
+    # Create a chemistry object with pH sensor
+    chem_obj = PoolObject(
+        "CHEM1",
+        {
+            "OBJTYP": CHEM_TYPE,
+            "SUBTYP": "ICHEM",
+            "SNAME": "IntelliChem",
+            PHVAL_ATTR: "7.2",
+        },
+    )
+
+    sensor = PoolSensor(
+        entry,
+        mock_controller,
+        chem_obj,
+        device_class=SensorDeviceClass.PH,
+        attribute_key=PHVAL_ATTR,
+        name="+ (pH)",
+    )
+
+    assert sensor.device_class == SensorDeviceClass.PH
+    assert sensor.native_value == 7.2

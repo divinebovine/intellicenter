@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from homeassistant.components.cover import CoverEntityFeature
+from homeassistant.components.cover import CoverDeviceClass, CoverEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
@@ -401,3 +401,18 @@ async def test_cover_extra_state_attributes(
     assert attrs["OBJNAM"] == "COVER1"
     assert NORMAL_ATTR in attrs  # Should include NORMAL attribute
     assert attrs[NORMAL_ATTR] == "ON"
+
+
+async def test_cover_device_class(
+    hass: HomeAssistant,
+    pool_object_cover_normally_closed: PoolObject,
+) -> None:
+    """Test that covers have the correct device class."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+
+    mock_controller = MagicMock()
+
+    cover = PoolCover(entry, mock_controller, pool_object_cover_normally_closed)
+
+    assert cover.device_class == CoverDeviceClass.SHADE

@@ -22,7 +22,17 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import (
+    CONF_KEEPALIVE_INTERVAL,
+    CONF_RECONNECT_DELAY,
+    DEFAULT_KEEPALIVE_INTERVAL,
+    DEFAULT_RECONNECT_DELAY,
+    DOMAIN,
+    MAX_KEEPALIVE_INTERVAL,
+    MAX_RECONNECT_DELAY,
+    MIN_KEEPALIVE_INTERVAL,
+    MIN_RECONNECT_DELAY,
+)
 from .pyintellicenter import BaseController, SystemInfo
 
 _LOGGER = logging.getLogger(__name__)
@@ -244,17 +254,47 @@ class OptionsFlowHandler(OptionsFlow):  # type: ignore[misc]
     ) -> FlowResult:
         """Manage the options for IntelliCenter integration.
 
-        Currently, this integration has no configurable options.
-        The host IP address is configured during initial setup and
-        can be updated via Zeroconf discovery if the device IP changes.
+        Allows configuration of:
+        - Keepalive interval: How often to send keepalive queries
+        - Reconnect delay: Initial delay before reconnection attempts
         """
         if user_input is not None:
-            # No options to save, just return
-            return self.async_create_entry(title="", data={})
+            return self.async_create_entry(title="", data=user_input)
 
-        # Show a simple form indicating no options are available
+        # Get current values or defaults
+        current_keepalive = self.config_entry.options.get(
+            CONF_KEEPALIVE_INTERVAL, DEFAULT_KEEPALIVE_INTERVAL
+        )
+        current_reconnect = self.config_entry.options.get(
+            CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY
+        )
+
         return self.async_show_form(
             step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_KEEPALIVE_INTERVAL,
+                        default=current_keepalive,
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(
+                            min=MIN_KEEPALIVE_INTERVAL,
+                            max=MAX_KEEPALIVE_INTERVAL,
+                        ),
+                    ),
+                    vol.Optional(
+                        CONF_RECONNECT_DELAY,
+                        default=current_reconnect,
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(
+                            min=MIN_RECONNECT_DELAY,
+                            max=MAX_RECONNECT_DELAY,
+                        ),
+                    ),
+                }
+            ),
             description_placeholders={
                 "host": self.config_entry.data.get(CONF_HOST, "Unknown")
             },

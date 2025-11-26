@@ -411,7 +411,19 @@ async def test_light_turn_on_with_each_effect(
 
 @pytest.mark.parametrize(
     "effect_code",
-    ["PARTY", "CARIB", "SSET", "ROMAN", "AMERCA", "ROYAL", "WHITER", "REDR", "BLUER", "GREENR", "MAGNTAR"],
+    [
+        "PARTY",
+        "CARIB",
+        "SSET",
+        "ROMAN",
+        "AMERCA",
+        "ROYAL",
+        "WHITER",
+        "REDR",
+        "BLUER",
+        "GREENR",
+        "MAGNTAR",
+    ],
 )
 async def test_light_state_update_with_each_effect(
     hass: HomeAssistant,

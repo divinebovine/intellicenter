@@ -52,16 +52,21 @@ class ICProtocol(asyncio.Protocol):
     - relying on IntelliCenter's NotifyList push updates to detect active connections
     """
 
-    def __init__(self, controller: "BaseController") -> None:
+    def __init__(
+        self, controller: "BaseController", keepalive_interval: int | None = None
+    ) -> None:
         """Initialize a protocol for a IntelliCenter system.
 
         Args:
             controller: The controller instance that manages this protocol.
                        The controller receives callbacks for connection events
                        and message processing.
+            keepalive_interval: Optional override for keepalive query interval in seconds.
+                              Defaults to KEEPALIVE_INTERVAL if not specified.
         """
 
         self._controller: BaseController = controller
+        self._keepalive_interval = keepalive_interval or KEEPALIVE_INTERVAL
 
         self._transport: asyncio.Transport | None = None
 
@@ -460,7 +465,7 @@ class ICProtocol(asyncio.Protocol):
                 # Send keepalive query if needed
                 if self._last_keepalive_sent:
                     time_since_keepalive = current_time - self._last_keepalive_sent
-                    if time_since_keepalive > KEEPALIVE_INTERVAL:
+                    if time_since_keepalive > self._keepalive_interval:
                         _LOGGER.debug(
                             f"PROTOCOL: sending keepalive query ({time_since_keepalive:.1f}s since last)"
                         )

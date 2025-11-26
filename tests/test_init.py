@@ -11,6 +11,7 @@ import pytest
 from custom_components.intellicenter import (
     DOMAIN,
     PLATFORMS,
+    PoolConnectionHandler,
     async_setup,
     async_setup_entry,
     async_unload_entry,
@@ -32,6 +33,9 @@ async def test_async_setup_entry_success(
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
     entry.data = {CONF_HOST: "192.168.1.100"}
+    entry.options = {}  # No custom options, will use defaults
+    entry.async_on_unload = MagicMock()
+    entry.add_update_listener = MagicMock()
 
     # Mock the handler's start method
     with patch(
@@ -43,11 +47,11 @@ async def test_async_setup_entry_success(
         mock_controller.model.__iter__ = MagicMock(return_value=iter([]))
         mock_controller_class.return_value = mock_controller
 
-        # Create a MockConnectionHandler class with async methods
-        class MockConnectionHandler:
-            """Mock ConnectionHandler for testing."""
+        # Create a MockPoolConnectionHandler class with async methods
+        class MockPoolConnectionHandler:
+            """Mock PoolConnectionHandler for testing."""
 
-            def __init__(self, controller, *args, **kwargs):
+            def __init__(self, hass, entry_id, controller, *args, **kwargs):
                 self.controller = controller
 
             async def start(self):
@@ -69,7 +73,8 @@ async def test_async_setup_entry_success(
                 pass
 
         with patch(
-            "custom_components.intellicenter.ConnectionHandler", MockConnectionHandler
+            "custom_components.intellicenter.PoolConnectionHandler",
+            MockPoolConnectionHandler,
         ):
             with patch.object(
                 hass.config_entries,
@@ -94,6 +99,7 @@ async def test_async_setup_entry_connection_failed(hass: HomeAssistant) -> None:
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
     entry.data = {CONF_HOST: "192.168.1.100"}
+    entry.options = {}  # No custom options, will use defaults
 
     with patch(
         "custom_components.intellicenter.ModelController"
@@ -101,11 +107,11 @@ async def test_async_setup_entry_connection_failed(hass: HomeAssistant) -> None:
         mock_controller = MagicMock()
         mock_controller_class.return_value = mock_controller
 
-        # Create a MockConnectionHandler class that raises ConnectionRefusedError
-        class MockConnectionHandler:
-            """Mock ConnectionHandler that fails to connect."""
+        # Create a MockPoolConnectionHandler class that raises ConnectionRefusedError
+        class MockPoolConnectionHandler:
+            """Mock PoolConnectionHandler that fails to connect."""
 
-            def __init__(self, controller, *args, **kwargs):
+            def __init__(self, hass, entry_id, controller, *args, **kwargs):
                 self.controller = controller
 
             async def start(self):
@@ -113,7 +119,8 @@ async def test_async_setup_entry_connection_failed(hass: HomeAssistant) -> None:
                 raise ConnectionRefusedError()
 
         with patch(
-            "custom_components.intellicenter.ConnectionHandler", MockConnectionHandler
+            "custom_components.intellicenter.PoolConnectionHandler",
+            MockPoolConnectionHandler,
         ):
             with pytest.raises(ConfigEntryNotReady):
                 await async_setup_entry(hass, entry)
@@ -184,3 +191,140 @@ async def test_async_unload_entry_platforms_fail(hass: HomeAssistant) -> None:
 
         # Now returns False when platforms fail to unload
         assert result is False
+
+
+# -------------------------------------------------------------------------------------
+# PoolConnectionHandler Tests
+# -------------------------------------------------------------------------------------
+
+
+class TestPoolConnectionHandler:
+    """Tests for the PoolConnectionHandler class."""
+
+    async def test_signal_names(self, hass: HomeAssistant) -> None:
+        """Test that signal names are correctly generated."""
+        mock_controller = MagicMock()
+        entry_id = "test_entry_123"
+
+        handler = PoolConnectionHandler(
+            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        )
+
+        assert handler.update_signal == f"{DOMAIN}_UPDATE_{entry_id}"
+        assert handler.connection_signal == f"{DOMAIN}_CONNECTION_{entry_id}"
+
+    async def test_started_logs_system_info(
+        self, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that started() logs the system name."""
+        mock_controller = MagicMock()
+        mock_controller.systemInfo.propName = "My Test Pool"
+        mock_controller.model = MagicMock()
+        mock_controller.model.__iter__ = MagicMock(return_value=iter([]))
+
+        handler = PoolConnectionHandler(
+            hass, "test_entry", mock_controller, timeBetweenReconnects=30
+        )
+
+        handler.started(mock_controller)
+
+        assert "connected to system: 'My Test Pool'" in caplog.text
+
+    async def test_started_handles_missing_system_info(
+        self, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that started() handles missing system info gracefully."""
+        mock_controller = MagicMock()
+        mock_controller.systemInfo = None
+
+        handler = PoolConnectionHandler(
+            hass, "test_entry", mock_controller, timeBetweenReconnects=30
+        )
+
+        # Should not raise an exception
+        handler.started(mock_controller)
+
+        assert "connected to system: 'Unknown'" in caplog.text
+
+    async def test_reconnected_sends_signal(self, hass: HomeAssistant) -> None:
+        """Test that reconnected() sends the connection signal."""
+        mock_controller = MagicMock()
+        mock_controller.systemInfo.propName = "My Test Pool"
+        entry_id = "test_entry"
+
+        handler = PoolConnectionHandler(
+            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        )
+
+        signal_received = []
+
+        async def signal_handler(is_connected: bool) -> None:
+            signal_received.append(is_connected)
+
+        hass.helpers.dispatcher.async_dispatcher_connect(
+            handler.connection_signal, signal_handler
+        )
+
+        handler.reconnected(mock_controller)
+        await hass.async_block_till_done()
+
+        assert signal_received == [True]
+
+    async def test_disconnected_sends_signal(self, hass: HomeAssistant) -> None:
+        """Test that disconnected() sends the connection signal."""
+        mock_controller = MagicMock()
+        mock_controller.systemInfo.propName = "My Test Pool"
+        entry_id = "test_entry"
+
+        handler = PoolConnectionHandler(
+            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        )
+
+        signal_received = []
+
+        async def signal_handler(is_connected: bool) -> None:
+            signal_received.append(is_connected)
+
+        hass.helpers.dispatcher.async_dispatcher_connect(
+            handler.connection_signal, signal_handler
+        )
+
+        handler.disconnected(mock_controller, None)
+        await hass.async_block_till_done()
+
+        assert signal_received == [False]
+
+    async def test_updated_sends_signal(self, hass: HomeAssistant) -> None:
+        """Test that updated() sends the update signal with updates."""
+        mock_controller = MagicMock()
+        entry_id = "test_entry"
+
+        handler = PoolConnectionHandler(
+            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        )
+
+        signal_received = []
+        test_updates = {"obj1": {"attr1": "val1"}}
+
+        async def signal_handler(updates: dict) -> None:
+            signal_received.append(updates)
+
+        hass.helpers.dispatcher.async_dispatcher_connect(
+            handler.update_signal, signal_handler
+        )
+
+        handler.updated(mock_controller, test_updates)
+        await hass.async_block_till_done()
+
+        assert signal_received == [test_updates]
+
+    async def test_custom_reconnect_delay(self, hass: HomeAssistant) -> None:
+        """Test that custom reconnect delay is used."""
+        mock_controller = MagicMock()
+
+        handler = PoolConnectionHandler(
+            hass, "test_entry", mock_controller, timeBetweenReconnects=60
+        )
+
+        # Check that the delay was passed to the parent class
+        assert handler._timeBetweenReconnects == 60

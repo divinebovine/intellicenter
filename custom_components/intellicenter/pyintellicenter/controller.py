@@ -262,6 +262,7 @@ class BaseController:
         host: str,
         port: int = 6681,
         loop: AbstractEventLoop | None = None,
+        keepalive_interval: int | None = None,
     ) -> None:
         """Initialize the controller.
 
@@ -269,9 +270,12 @@ class BaseController:
             host: IP address or hostname of the IntelliCenter
             port: TCP port for connection (default: 6681)
             loop: Event loop to use (default: current event loop)
+            keepalive_interval: Optional override for keepalive query interval in seconds.
+                              Defaults to protocol's KEEPALIVE_INTERVAL if not specified.
         """
         self._host = host
         self._port = port
+        self._keepalive_interval = keepalive_interval
         # Use provided loop, running loop, or create new one
         if loop is not None:
             self._loop = loop
@@ -341,7 +345,9 @@ class BaseController:
         # Create connection with timeout to prevent indefinite hangs
         self._transport, self._protocol = await asyncio.wait_for(
             self._loop.create_connection(
-                lambda: ICProtocol(self), self._host, self._port
+                lambda: ICProtocol(self, self._keepalive_interval),
+                self._host,
+                self._port,
             ),
             timeout=CONNECTION_TIMEOUT,
         )
@@ -638,6 +644,7 @@ class ModelController(BaseController):
         model: PoolModel,
         port: int = 6681,
         loop: AbstractEventLoop | None = None,
+        keepalive_interval: int | None = None,
     ) -> None:
         """Initialize the controller.
 
@@ -646,8 +653,10 @@ class ModelController(BaseController):
             model: The PoolModel to populate and update
             port: TCP port for connection (default: 6681)
             loop: Event loop to use (default: current event loop)
+            keepalive_interval: Optional override for keepalive query interval in seconds.
+                              Defaults to protocol's KEEPALIVE_INTERVAL if not specified.
         """
-        super().__init__(host, port, loop)
+        super().__init__(host, port, loop, keepalive_interval)
         self._model: PoolModel = model
 
         self._updatedCallback: (
