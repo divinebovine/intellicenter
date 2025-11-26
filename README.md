@@ -1,273 +1,105 @@
 # Pentair IntelliCenter for Home Assistant
 
-[![hacs][hacsbadge]][hacs]
+[![HACS Custom][hacsbadge]][hacs]
 [![GitHub Release][releases-shield]][releases]
+[![Tests](https://github.com/joyfulhouse/intellicenter/actions/workflows/quality-validation.yml/badge.svg)](https://github.com/joyfulhouse/intellicenter/actions/workflows/quality-validation.yml)
 [![Quality Scale](https://img.shields.io/badge/quality_scale-platinum-e5e4e2)](https://www.home-assistant.io/docs/quality_scale/)
-[![Quality Validation](https://github.com/joyfulhouse/intellicenter/actions/workflows/quality-validation.yml/badge.svg)](https://github.com/joyfulhouse/intellicenter/actions/workflows/quality-validation.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Home Assistant integration for Pentair IntelliCenter pool control systems. Monitor and control your pool equipment directly from Home Assistant with real-time local push updates.
+A Home Assistant custom integration for **Pentair IntelliCenter** pool control systems. Monitor and control your pool, spa, lights, pumps, and heaters directly from Home Assistant with real-time local push updates.
+
+<p align="center">
+  <img src="device_info.png" width="400" alt="Device Info"/>
+  <img src="entities.png" width="400" alt="Entities"/>
+</p>
+
+## Highlights
+
+- **100% Local** - Direct TCP connection to your IntelliCenter. No cloud, no internet required.
+- **Real-time Updates** - Push-based notifications for instant state changes.
+- **Zero Configuration** - Automatic discovery via Zeroconf/mDNS.
+- **Reliable** - Automatic reconnection with exponential backoff if connection drops.
+- **Comprehensive** - Supports pools, spas, lights, pumps, heaters, chemistry, schedules, and more.
 
 ## Requirements
 
-- Home Assistant 2023.1 or newer
-- Pentair IntelliCenter controller (i5P, i7P, i9P, or i10P)
-- Local network access to your IntelliCenter
+| Requirement | Details |
+|-------------|---------|
+| Home Assistant | 2023.1 or newer |
+| IntelliCenter | i5P, i7P, i9P, or i10P |
+| Network | Local network access (TCP port 6681) |
 
-## Installation
+## Quick Start
 
-### Method 1: HACS (Recommended)
+### Installation via HACS (Recommended)
 
-1. Install [HACS](https://hacs.xyz/docs/installation/manual) if you haven't already
-2. Open HACS in Home Assistant
-3. Click on "Integrations"
-4. Click the three dots menu (⋮) in the top right
-5. Select "Custom repositories"
-6. Add repository URL: `https://github.com/joyfulhouse/intellicenter`
-7. Select category: "Integration"
-8. Click "Add"
-9. Find "Pentair IntelliCenter" in HACS and click "Download"
-10. Restart Home Assistant
-11. Continue to [Configuration](#configuration)
+1. Open **HACS** → **Integrations** → **⋮** → **Custom repositories**
+2. Add `https://github.com/joyfulhouse/intellicenter` (Category: Integration)
+3. Search for "Pentair IntelliCenter" and click **Download**
+4. Restart Home Assistant
+5. Your IntelliCenter should be auto-discovered under **Settings** → **Devices & Services**
 
-### Method 2: Manual Installation
+### Manual Installation
 
 1. Download the [latest release](https://github.com/joyfulhouse/intellicenter/releases)
-2. Extract the `custom_components/intellicenter` folder
-3. Copy to your Home Assistant `config/custom_components/` directory
-4. Restart Home Assistant
-5. Continue to [Configuration](#configuration)
+2. Copy `custom_components/intellicenter` to your `config/custom_components/` directory
+3. Restart Home Assistant
 
 ## Configuration
 
-### Automatic Setup (Recommended)
+### Automatic Discovery
 
-Your IntelliCenter should be automatically discovered via Zeroconf:
+Your IntelliCenter is automatically discovered via Zeroconf:
 
 1. Go to **Settings** → **Devices & Services**
 2. Look for "Pentair IntelliCenter" under **Discovered**
-3. Click **Configure**
-4. Confirm the discovered device
-5. Done! Your entities will appear automatically
+3. Click **Configure** and confirm
 
 ### Manual Setup
 
-If automatic discovery doesn't work:
+If discovery doesn't work:
 
-1. Go to **Settings** → **Devices & Services**
-2. Click **+ Add Integration**
-3. Search for "Pentair IntelliCenter"
-4. Enter your IntelliCenter's IP address
-5. Click **Submit**
+1. **Settings** → **Devices & Services** → **+ Add Integration**
+2. Search for "Pentair IntelliCenter"
+3. Enter your IntelliCenter's IP address
+
+**Finding your IP address:**
+- Router's DHCP client list (look for "Pentair")
+- Pentair mobile app: **Settings** → **System Information**
+- IntelliCenter display panel
+
+> **Tip:** Assign a static IP or DHCP reservation to prevent address changes.
 
 ### Advanced Options
 
-After setup, you can configure advanced connection settings:
+After setup, configure connection settings:
 
-1. Go to **Settings** → **Devices & Services** → **IntelliCenter**
-2. Click **Configure**
-3. Adjust settings:
-   - **Keepalive Interval**: How often to send keepalive queries (30-300 seconds, default 90)
-   - **Reconnect Delay**: Initial delay before reconnection attempts (10-120 seconds, default 30)
+1. **Settings** → **Devices & Services** → **IntelliCenter** → **Configure**
+2. Adjust:
+   - **Keepalive Interval** (30-300s, default 90) - Connection health check frequency
+   - **Reconnect Delay** (10-120s, default 30) - Initial retry delay after disconnect
 
-These settings are useful if you experience frequent disconnections or want to adjust connection behavior.
+## Supported Equipment
 
-**Finding Your IP Address:**
-- Check your router's DHCP client list
-- Use the Pentair mobile app: Settings → System Information
-- Check the IntelliCenter display panel
-
-**Tip:** Assign a static IP or DHCP reservation to prevent IP address changes.
-
-## Features
-
-- **Local Push Updates**: Real-time updates with no polling delay
-- **Automatic Discovery**: Zeroconf/mDNS discovery for easy setup
-- **Reliable Connection**: Automatic reconnection if IntelliCenter reboots
-- **No Cloud Required**: Direct local network connection
-- **Security Independent**: Works regardless of IntelliCenter security settings
-
-## Supported Entities
-
-The integration automatically creates entities for all your pool equipment:
-
-### Water Bodies (Pool/Spa)
-- **Switch**: Turn pool/spa on and off
-- **Sensors**: Current temperature and target temperature
-- **Water Heater**: Control heater selection and temperature setpoint
-  - Status: OFF, IDLE (enabled but not heating), or ON (actively heating)
-  - Supports turn_on/turn_off operations
-
-### Lights
-- **Light Entity**: Individual lights and light shows
-- **Color Effects**: Supported for IntelliBrite and MagicStream lights
-- **Light Shows**: Coordinated multi-light effects
-
-### Circuits & Features
-- **Switches**: All circuits marked as "Featured" on IntelliCenter
-  - Examples: Pool cleaner, spa blower, waterfalls, etc.
-
-### Pumps
-- **Binary Sensor**: Pump running status
-- **Sensors**: Power consumption (W), speed (RPM), flow rate (GPM)
-  - Power rounded to nearest 25W to reduce updates
-  - RPM/GPM may fluctuate based on pump settings
-
-### Chemistry (IntelliChem)
-- **Sensors**: pH level, ORP level, pH tank level, ORP tank level
-
-### Heaters
-- **Binary Sensor**: Shows if heater is running (independent of which body)
-
-### Schedules
-- **Binary Sensor**: Indicates if schedule is currently active
-  - *Note: Disabled by default*
-
-### System
-- **Switch**: Vacation mode control (*disabled by default*)
-- **Binary Sensor**: Freeze prevention mode status
-- **Sensors**: Water temperature, air temperature, solar sensor (if equipped)
-
-## Troubleshooting
-
-### Integration Not Discovered
-
-If your IntelliCenter isn't automatically discovered:
-
-1. **Check Network**: Ensure Home Assistant and IntelliCenter are on the same network/VLAN
-   - IntelliCenter uses mDNS (Zeroconf) for auto-discovery
-   - Some routers/firewalls block multicast traffic between VLANs
-2. **Multicast Traffic**: Enable mDNS reflection or IGMP snooping on your router if devices are on different VLANs
-3. **Use Manual Setup**: Add the integration manually using your IntelliCenter's IP address
-   - Go to **Settings** → **Devices & Services** → **+ Add Integration**
-   - Search for "Pentair IntelliCenter"
-   - Enter the IP address when prompted
-
-**Finding Your IntelliCenter IP Address:**
-- Check your router's DHCP client list for "Pentair" devices
-- Use the Pentair mobile app: **Settings** → **System Information**
-- Check the IntelliCenter display panel under network settings
-- Assign a static IP or DHCP reservation to prevent address changes
-
-### Connection Failed
-
-If you see "Failed to connect" or "Cannot connect" errors during setup:
-
-1. **Verify IP Address**: Double-check the IP address is correct
-2. **Port Accessibility**: Ensure port 6681 (TCP) is not blocked by firewalls
-   - Test connectivity: `telnet <intellicenter-ip> 6681` from Home Assistant host
-3. **Network Routing**: Verify routing between Home Assistant and IntelliCenter
-   - Test ping: `ping <intellicenter-ip>`
-4. **IntelliCenter Status**:
-   - Ensure the IntelliCenter is powered on and fully booted
-   - Check that the IntelliCenter's network cable is connected
-   - Restart your IntelliCenter (power cycle) if network seems unresponsive
-5. **Firmware**: Ensure your IntelliCenter firmware is up to date
-   - Update via the Pentair mobile app or directly on the device
-
-### Entities Showing "Unavailable"
-
-If entities show "unavailable" or stop updating:
-
-1. **Check Connection Status**:
-   - Go to **Settings** → **Devices & Services** → **IntelliCenter**
-   - Look for connection status messages
-2. **Review Logs**:
-   - Go to **Settings** → **System** → **Logs**
-   - Look for errors from `custom_components.intellicenter`
-   - Common issues: network timeouts, connection refused, protocol errors
-3. **Reload Integration**:
-   - **Settings** → **Devices & Services** → **IntelliCenter** → ⋮ → **Reload**
-   - This will reconnect to the IntelliCenter without losing configuration
-4. **Network Connectivity**:
-   - Verify Home Assistant can still reach the IntelliCenter IP
-   - Check if the IntelliCenter IP address changed (reassign static IP/DHCP reservation)
-5. **Automatic Recovery**:
-   - The integration automatically attempts to reconnect with exponential backoff
-   - Initial retry: 30 seconds, then 45s, 67s, 100s, etc.
-   - No action needed - entities will recover when connection is restored
-
-### Incorrect Values or Entities
-
-If entities show wrong values or unexpected behavior:
-
-1. **Temperature Units**:
-   - The integration respects the IntelliCenter's temperature unit setting (Metric/English)
-   - If you change units on IntelliCenter, reload the integration to update
-2. **Missing Equipment**:
-   - Not all equipment types may be supported (see Supported Entities)
-   - Check logs for warnings about unrecognized equipment
-   - Report missing equipment types via GitHub Issues
-3. **Equipment Configuration Changes**:
-   - After adding/removing equipment on IntelliCenter, reload the integration
-   - New equipment should appear automatically
-4. **Entity Names**:
-   - Entity names come from IntelliCenter's "Short Name" (sname) attribute
-   - Change names in the Pentair app or IntelliCenter UI, then reload integration
-
-### Performance Issues
-
-If the integration causes performance problems:
-
-1. **Too Many Entities**:
-   - Disable unused entities: **Settings** → **Devices & Services** → **IntelliCenter** → device → entity → ⚙️ → disable
-   - Schedule entities are disabled by default (enable only if needed)
-2. **Network Latency**:
-   - Ensure Home Assistant and IntelliCenter have low-latency connection (<10ms ping)
-   - Avoid WiFi for IntelliCenter if possible - use wired Ethernet
-3. **CPU Usage**:
-   - Integration uses async I/O and minimal polling
-   - High CPU usage likely indicates network issues causing frequent reconnects
-
-### Authentication and Security
-
-**Note**: This integration connects locally to IntelliCenter via TCP port 6681. It does NOT use cloud services or require authentication credentials.
-
-- No username/password needed
-- Works independently of IntelliCenter's password protection settings
-- Entirely local communication - no internet required
-- Network-level security recommended (VLAN isolation, firewall rules)
-
-### Enable Debug Logging
-
-To diagnose issues, enable detailed debug logging:
-
-Add to your `configuration.yaml`:
-
-```yaml
-logger:
-  default: warning
-  logs:
-    custom_components.intellicenter: debug
-```
-
-Then restart Home Assistant and check **Settings** → **System** → **Logs**.
-
-**What to look for in debug logs:**
-- Connection establishment messages
-- Protocol-level communication (request/response pairs)
-- Entity update notifications
-- Reconnection attempts and delays
-- Error messages with stack traces
-
-### Still Having Issues?
-
-1. **Check Known Limitations**: See the Known Limitations section below
-2. **Search Existing Issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
-3. **Ask for Help**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)
-4. **Report Bugs**: Include:
-   - Home Assistant version
-   - IntelliCenter model and firmware version
-   - Integration version
-   - Debug logs showing the issue
-   - Steps to reproduce
+| Category | Entity Type | Features |
+|----------|-------------|----------|
+| **Pool/Spa** | Switch, Sensors, Water Heater | On/off, temperature, heater control |
+| **Lights** | Light | On/off, color effects (IntelliBrite, MagicStream) |
+| **Light Shows** | Light | Coordinated multi-light effects |
+| **Circuits** | Switch | All "Featured" circuits (cleaner, blower, etc.) |
+| **Pumps** | Binary Sensor, Sensors | Running status, power (W), speed (RPM), flow (GPM) |
+| **Chemistry** | Sensors | pH, ORP, tank levels (IntelliChem) |
+| **Heaters** | Binary Sensor | Running status |
+| **Schedules** | Binary Sensor | Active status (disabled by default) |
+| **System** | Switch, Binary Sensor, Sensors | Vacation mode, freeze protection, temperatures |
 
 ## Automation Examples
 
-### Turn on Spa at Sunset
+### Spa Ready at Sunset
 
 ```yaml
 automation:
-  - alias: "Evening Spa Relaxation"
+  - alias: "Evening Spa"
     trigger:
       - platform: sun
         event: sunset
@@ -283,7 +115,7 @@ automation:
           temperature: 102
 ```
 
-### Pool Party Lighting
+### Pool Party Lights
 
 ```yaml
 automation:
@@ -300,64 +132,129 @@ automation:
           effect: "Party"
 ```
 
-## Screenshots
+### Freeze Protection Alert
 
-<img src="device_info.png" width="400"/>
+```yaml
+automation:
+  - alias: "Freeze Protection Alert"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.freeze_protection
+        to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Pool Alert"
+          message: "Freeze protection activated!"
+```
 
-<img src="entities.png" width="400"/>
+## Troubleshooting
 
-## Known Limitations
+<details>
+<summary><strong>Integration Not Discovered</strong></summary>
 
-- **Equipment Coverage**: Tested primarily with standard configurations. Some equipment (covers, cascades, multiple heaters) may have limited testing.
-- **Unit Changes**: Changing between metric/imperial while integration is running may cause temporary incorrect values. Reload the integration after unit changes.
-- **Configuration Changes**: Reload the integration after making significant changes to your pool configuration on the IntelliCenter.
+1. Ensure Home Assistant and IntelliCenter are on the same network/VLAN
+2. Check that mDNS/multicast traffic isn't blocked
+3. Try manual setup with the IP address
+</details>
+
+<details>
+<summary><strong>Connection Failed</strong></summary>
+
+1. Verify the IP address is correct
+2. Ensure TCP port 6681 is accessible: `telnet <ip> 6681`
+3. Check IntelliCenter is powered on and network cable connected
+4. Try power cycling the IntelliCenter
+</details>
+
+<details>
+<summary><strong>Entities Unavailable</strong></summary>
+
+1. Check connection status in **Settings** → **Devices & Services**
+2. Review logs: **Settings** → **System** → **Logs**
+3. Try reloading: **IntelliCenter** → **⋮** → **Reload**
+4. The integration auto-reconnects with exponential backoff (30s, 45s, 67s...)
+</details>
+
+<details>
+<summary><strong>Enable Debug Logging</strong></summary>
+
+Add to `configuration.yaml`:
+
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.intellicenter: debug
+```
+</details>
 
 ## Architecture
 
-This integration uses the [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) library for protocol communication:
+This integration is built on two packages:
 
-- **pyintellicenter**: Standalone Python library handling TCP protocol, connection management, and pool equipment model
-- **intellicenter**: Home Assistant integration that creates entities and bridges HA with pyintellicenter
+| Package | Description |
+|---------|-------------|
+| [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) | Standalone Python library for IntelliCenter protocol |
+| intellicenter | Home Assistant integration using pyintellicenter |
 
-## Development & Contributing
+The separation allows the protocol library to be used in other projects and simplifies testing.
 
-### Prerequisites
+## Development
 
 ```bash
-# Clone repository
+# Clone and setup
 git clone https://github.com/joyfulhouse/intellicenter.git
 cd intellicenter
-
-# Install dependencies (uses pyintellicenter from PyPI)
 uv sync
-```
 
-### Development with Local pyintellicenter
-
-For developing both packages simultaneously:
-
-```bash
+# For simultaneous pyintellicenter development
 git clone https://github.com/joyfulhouse/pyintellicenter.git ../pyintellicenter
 uv pip install -e ../pyintellicenter
-```
 
-### Testing
-
-```bash
-uv run pytest                    # Run all tests
+# Testing
+uv run pytest                    # Run tests
 uv run pytest --cov              # With coverage
-uv run ruff check --fix          # Lint and fix
-uv run ruff format               # Format code
+uv run ruff check --fix          # Lint
+uv run ruff format               # Format
 ```
 
-See [VALIDATION.md](VALIDATION.md) for development setup and testing guidelines.
+See [VALIDATION.md](VALIDATION.md) for full development guidelines.
 
-Contributions welcome! Please ensure all tests pass before submitting PRs.
+## Known Limitations
+
+- **Equipment Coverage** - Tested primarily with standard configurations. Some equipment (covers, cascades, multiple heaters) may have limited testing.
+- **Unit Changes** - Reload integration after changing metric/imperial on IntelliCenter.
+- **Configuration Changes** - Reload integration after significant pool configuration changes.
+
+## Acknowledgments
+
+This project builds upon the excellent work of:
+
+- **[@dwradcliffe](https://github.com/dwradcliffe)** - [Original intellicenter integration](https://github.com/dwradcliffe/intellicenter) that pioneered Home Assistant support for Pentair IntelliCenter systems
+- **[@jlvaillant](https://github.com/jlvaillant)** - [Enhanced fork](https://github.com/jlvaillant/intellicenter) with additional features and improvements
+
+Thank you for your foundational work that made this integration possible!
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Ensure all tests pass (`uv run pytest`)
+4. Submit a pull request
+
+## License
+
+This project is licensed under the Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)
+
+---
 
 [hacs]: https://github.com/hacs/integration
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange
