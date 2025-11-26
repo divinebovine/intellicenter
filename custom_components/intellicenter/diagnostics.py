@@ -14,7 +14,7 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .pyintellicenter import ModelController
+from pyintellicenter import ModelController
 
 # Keys to redact from diagnostics output for privacy
 TO_REDACT = {

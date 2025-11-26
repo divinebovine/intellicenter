@@ -59,6 +59,18 @@ If automatic discovery doesn't work:
 4. Enter your IntelliCenter's IP address
 5. Click **Submit**
 
+### Advanced Options
+
+After setup, you can configure advanced connection settings:
+
+1. Go to **Settings** → **Devices & Services** → **IntelliCenter**
+2. Click **Configure**
+3. Adjust settings:
+   - **Keepalive Interval**: How often to send keepalive queries (30-300 seconds, default 90)
+   - **Reconnect Delay**: Initial delay before reconnection attempts (10-120 seconds, default 30)
+
+These settings are useful if you experience frequent disconnections or want to adjust connection behavior.
+
 **Finding Your IP Address:**
 - Check your router's DHCP client list
 - Use the Pentair mobile app: Settings → System Information

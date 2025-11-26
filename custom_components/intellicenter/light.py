@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import PoolEntity, get_controller
-from .pyintellicenter import (
+from pyintellicenter import (
     ACT_ATTR,
     CIRCUIT_ATTR,
     STATUS_ATTR,

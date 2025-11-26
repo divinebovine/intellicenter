@@ -10,7 +10,7 @@ import pytest
 
 from custom_components.intellicenter import DOMAIN
 from custom_components.intellicenter.light import LIGHTS_EFFECTS, PoolLight
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     ACT_ATTR,
     STATUS_ATTR,
     PoolModel,

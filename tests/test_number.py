@@ -9,7 +9,7 @@ import pytest
 
 from custom_components.intellicenter import DOMAIN
 from custom_components.intellicenter.number import PoolNumber
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     PRIM_ATTR,

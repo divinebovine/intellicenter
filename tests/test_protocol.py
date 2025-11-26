@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from custom_components.intellicenter.pyintellicenter.protocol import (
+from pyintellicenter.protocol import (
     CONNECTION_IDLE_TIMEOUT,
     FLOW_CONTROL_TIMEOUT,
     HEARTBEAT_INTERVAL,

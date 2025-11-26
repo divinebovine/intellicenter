@@ -33,7 +33,7 @@ from .const import (
     MIN_KEEPALIVE_INTERVAL,
     MIN_RECONNECT_DELAY,
 )
-from .pyintellicenter import BaseController, SystemInfo
+from pyintellicenter import BaseController, SystemInfo
 
 _LOGGER = logging.getLogger(__name__)
 

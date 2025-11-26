@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from custom_components.intellicenter.pyintellicenter.attributes import (
+from pyintellicenter import (
     BODY_TYPE,
     CIRCUIT_TYPE,
     FEATR_ATTR,
@@ -12,7 +12,7 @@ from custom_components.intellicenter.pyintellicenter.attributes import (
     STATUS_ATTR,
     SUBTYP_ATTR,
 )
-from custom_components.intellicenter.pyintellicenter.model import PoolModel, PoolObject
+from pyintellicenter import PoolModel, PoolObject
 
 
 class TestPoolObject:

@@ -21,7 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import PoolEntity, get_controller
-from .pyintellicenter import (
+from pyintellicenter import (
     BODY_ATTR,
     BODY_TYPE,
     HEATER_ATTR,

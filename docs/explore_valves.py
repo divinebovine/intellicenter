@@ -87,9 +87,9 @@ class IntelliCenterExplorer:
 
     def on_data(self, msg):
         """Handle received messages."""
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Received message: {msg.get('command', msg.get('response'))}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Check for object list
         if "objectList" in msg:
@@ -127,16 +127,16 @@ class IntelliCenterExplorer:
             transport.close()
 
             # Print summary
-            print(f"\n{'='*80}")
+            print(f"\n{'=' * 80}")
             print("SUMMARY")
-            print(f"{'='*80}")
+            print(f"{'=' * 80}")
             print(f"Total objects received: {len(self.objects)}")
             print(f"Valve objects found: {len(self.valve_objects)}")
 
             if self.valve_objects:
                 print("\n📋 VALVE OBJECTS DETAIL:")
                 for valve in self.valve_objects:
-                    print(f"\n{'-'*80}")
+                    print(f"\n{'-' * 80}")
                     print(json.dumps(valve, indent=2))
 
                 # Save to file

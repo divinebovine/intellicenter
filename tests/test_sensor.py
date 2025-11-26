@@ -15,7 +15,7 @@ import pytest
 
 from custom_components.intellicenter import DOMAIN
 from custom_components.intellicenter.const import CONST_GPM, CONST_RPM
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     GPM_ATTR,

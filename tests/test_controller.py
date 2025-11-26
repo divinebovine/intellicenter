@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from custom_components.intellicenter.pyintellicenter.controller import (
+from pyintellicenter.controller import (
     BaseController,
     CommandError,
     ConnectionHandler,
@@ -15,7 +15,7 @@ from custom_components.intellicenter.pyintellicenter.controller import (
     SystemInfo,
     prune,
 )
-from custom_components.intellicenter.pyintellicenter.model import PoolModel
+from pyintellicenter import PoolModel
 
 
 class TestPrune:

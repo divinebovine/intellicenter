@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     ModelController,
     PoolModel,
     PoolObject,
     SystemInfo,
 )
-from custom_components.intellicenter.pyintellicenter.attributes import (
+from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     CIRCUIT_TYPE,

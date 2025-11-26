@@ -16,26 +16,45 @@ All development, pull requests, and collaboration should happen within the `joyf
 
 This is a Home Assistant custom integration for Pentair IntelliCenter pool control systems. It connects to IntelliCenter via local network (not cloud) using a custom TCP protocol on port 6681, supporting Zeroconf discovery and local push updates for real-time responsiveness.
 
-**Current Quality Scale**: **Gold** ✅
-**Target Quality Scale**: Platinum
+**Current Quality Scale**: **Platinum** ✅ (v3.1.0+)
 
-The integration now meets **Gold** quality scale requirements with comprehensive automated test coverage (59 tests), extensive user documentation, automatic discovery, diagnostic capabilities, and UI reconfiguration support. See the Quality Scale Roadmap section below for achieved milestones and Platinum aspirations.
+The integration meets **Platinum** quality scale requirements with:
+- 257 automated tests across all platforms
+- Comprehensive type annotations (mypy strict mode)
+- Full code documentation
+- Production hardening (circuit breaker, metrics, health monitoring)
+- User-configurable options (keepalive, reconnect delay)
+- External `pyintellicenter` library for protocol layer (https://github.com/joyfulhouse/pyintellicenter)
 
 ## Development Commands
 
 ### Code Quality
 ```bash
-# Run all pre-commit hooks (includes black, flake8, isort, bandit, codespell, yamllint)
+# Run ruff linting with auto-fix
+uv run ruff check --fix
+
+# Format code with ruff
+uv run ruff format
+
+# Run type checking with mypy
+uv run mypy custom_components/intellicenter/ --ignore-missing-imports
+
+# Run all pre-commit hooks
 pre-commit run --all-files
+```
 
-# Auto-format code with black
-black custom_components/intellicenter/
+### Development Setup
 
-# Sort imports with isort
-isort custom_components/intellicenter/
+The protocol layer is in a separate package (`pyintellicenter`). For development:
 
-# Run linting with flake8
-flake8 custom_components/intellicenter/
+```bash
+# Clone both repositories
+git clone https://github.com/joyfulhouse/intellicenter.git
+git clone https://github.com/joyfulhouse/pyintellicenter.git
+
+# Install pyintellicenter in development mode
+cd intellicenter
+uv pip install -e ../pyintellicenter
 ```
 
 ### Testing
@@ -44,16 +63,16 @@ flake8 custom_components/intellicenter/
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run tests with coverage
-pytest --cov=custom_components/intellicenter --cov-report=html
+uv run pytest --cov=custom_components/intellicenter --cov-report=html
 
 # Run specific test file
-pytest tests/test_config_flow.py
+uv run pytest tests/test_config_flow.py
 
 # Run tests with verbose output
-pytest -v
+uv run pytest -v
 ```
 
 **Setting up tests**:
@@ -115,24 +134,31 @@ The integration follows a layered architecture:
 1. **Home Assistant Layer** (`custom_components/intellicenter/`)
    - Platform modules: `light.py`, `sensor.py`, `switch.py`, `binary_sensor.py`, `water_heater.py`, `number.py`, `cover.py`
    - Entry point: `__init__.py` - Sets up integration, manages entity lifecycle
-   - Config flow: `config_flow.py` - Handles UI setup and Zeroconf discovery
+   - Config flow: `config_flow.py` - Handles UI setup, Zeroconf discovery, and options flow
    - Base entity: `PoolEntity` class in `__init__.py` - Common functionality for all entities
+   - `PoolConnectionHandler` - Home Assistant integration bridge for connection events
+   - `OnOffControlMixin` - Mixin for simple on/off entities
 
-2. **Protocol/Model Layer** (`pyintellicenter/`)
-   - `controller.py` - Three controller classes:
+2. **Protocol/Model Layer** (`pyintellicenter` - external package)
+   - Separate repository: https://github.com/joyfulhouse/pyintellicenter
+   - Installed via `manifest.json` requirements: `pyintellicenter>=1.0.0`
+   - `controller.py` - Controller classes:
      - `BaseController`: Basic TCP connection and command handling
      - `ModelController`: Manages PoolModel state and tracks attribute changes
-     - `ConnectionHandler`: Reconnection logic with exponential backoff
-   - `protocol.py` - `ICProtocol`: Low-level asyncio protocol, handles JSON message framing, request queuing (one-at-a-time), and heartbeat pings
+     - `ConnectionHandler`: Reconnection logic with exponential backoff and circuit breaker
+     - `ConnectionMetrics`: Tracks response times, reconnect attempts, and health
+   - `protocol.py` - `ICProtocol`: Low-level asyncio protocol using orjson, handles message framing, request queuing (one-at-a-time), and keepalive queries
    - `model.py` - `PoolModel` and `PoolObject`: Object model representing pool equipment
    - `attributes.py` - Attribute definitions and type mappings
 
 ### Key Architectural Patterns
 
 **Connection Management**: The integration uses a layered approach to handle unreliable network connections:
-- `ICProtocol` handles transport-level concerns (message framing, flow control)
+- `ICProtocol` handles transport-level concerns (message framing, flow control, keepalive queries)
 - `ModelController` manages state synchronization
-- `ConnectionHandler` implements automatic reconnection with exponential backoff starting at 30s
+- `ConnectionHandler` implements automatic reconnection with exponential backoff (configurable, default 30s)
+- Circuit breaker pattern prevents hammering dead servers (opens after 5 failures)
+- `ConnectionMetrics` tracks response times and reconnect attempts for observability
 
 **State Updates**: Real-time updates flow through the system via:
 1. IntelliCenter sends `NotifyList` messages when equipment state changes
@@ -157,9 +183,11 @@ Entities are created based on equipment characteristics in the pool model:
 
 ### Important Protocol Details
 
-- **Message Format**: JSON over TCP, terminated with `\r\n`
+- **Message Format**: JSON over TCP (using orjson for 2-3x faster serialization), terminated with `\r\n`
 - **Message IDs**: Auto-incremented integers for request/response correlation
-- **Heartbeat**: Protocol sends "ping" every 10s, expects "pong" response, closes connection after 2 missed pongs
+- **Keepalive**: Protocol sends lightweight queries every 90 seconds (configurable), disconnects after 3 missed responses
+- **Buffer Protection**: 1MB max buffer size to prevent DoS via malformed messages
+- **Flow Control**: One request on wire at a time, with locked atomic operations and deadlock detection
 - **Attribute Tracking**: Integration requests monitoring of specific attributes via `RequestParamList` command
   - Queries are batched to max 50 attributes to avoid choking the protocol
 - **Temperature Units**: System supports METRIC/ENGLISH mode via `MODE_ATTR` on SYSTEM object
@@ -227,15 +255,9 @@ The integration has achieved **Platinum** quality scale (v3.0.0). The roadmap be
 - ✅ Supports translations (English in `strings.json`)
 - ✅ Extensive non-technical user documentation (README with troubleshooting, automation examples)
 - ⚠️ Firmware/software updates through HA - Not applicable (hardware doesn't support)
-- ✅ **Automated tests covering entire integration** - 59 tests across 6 test files:
-  - Config flow: 8 tests
-  - Integration setup: 5 tests
-  - Model layer: 24 tests
-  - Light platform: 14 tests
-  - Switch platform: 10 tests
-  - Sensor platform: 1 test (stub, expandable)
-- ✅ UI reconfiguration support
-- ✅ Diagnostic capabilities (`diagnostics.py`)
+- ✅ **Automated tests covering entire integration** - 257 tests across 14 test files
+- ✅ UI reconfiguration support (options flow for keepalive/reconnect settings)
+- ✅ Diagnostic capabilities (`diagnostics.py` with connection metrics)
 
 ### Platinum Requirements ✅ ACHIEVED
 
@@ -265,59 +287,61 @@ The integration has achieved **Platinum** quality scale (v3.0.0). The roadmap be
   - Attribute tracking batched to 50 attributes to prevent protocol choking
   - Efficient flow control prevents overwhelming IntelliCenter
   - Minimal CPU usage through event-driven architecture
+  - orjson for 2-3x faster JSON serialization
 - ✅ **Minimal network overhead**:
   - Push-based model using NotifyList for real-time updates
-  - Keepalive queries only every 90 seconds
+  - Keepalive queries configurable (30-300 seconds, default 90)
   - Flow control ensures one request at a time
 
 **Testing**: ✅ COMPLETE
 - ✅ **Comprehensive automated test suite** using `pytest-homeassistant-custom-component`:
-  - **Config flow tests**: 8 tests covering user setup, Zeroconf discovery, error handling
+  - **Config flow tests**: 8 tests
+  - **Integration tests**: 12 tests (includes PoolConnectionHandler)
+  - **Protocol tests**: 24 tests (message parsing, flow control, keepalive)
+  - **Controller tests**: 33 tests (BaseController, ConnectionHandler, ConnectionMetrics)
+  - **Model tests**: 24 tests (PoolObject, PoolModel state management)
   - **Platform tests**:
-    - Light platform: 14 tests
-    - Switch platform: 10 tests
-    - Sensor platform: Expandable test structure
-  - **Protocol tests**: 24 tests covering:
-    - Message parsing (JSON, multi-message, buffered)
-    - Connection handling (connect, disconnect, data received)
-    - Flow control (queuing, pending tracking, deadlock detection)
-    - Heartbeat monitoring (keepalive, idle timeout)
-  - **Controller tests**: 33 tests covering:
-    - BaseController (connection lifecycle, command sending, response handling)
-    - SystemInfo (initialization, updates, unique ID generation)
-    - ConnectionHandler (reconnection, exponential backoff, debounced notifications)
-  - **Model tests**: 24 tests covering PoolObject and PoolModel state management
-  - **Integration tests**: 5 tests for end-to-end entity creation and setup
-  - **Total**: 100+ automated tests with TCP connection mocking for repeatability
+    - Light: 14 tests (parameterized effect tests)
+    - Switch: 11 tests (device class)
+    - Sensor: 18 tests (pH device class)
+    - Binary Sensor: 15 tests
+    - Water Heater: 19 tests
+    - Cover: 17 tests (device class)
+    - Number: 14 tests
+  - **Diagnostics tests**: 9 tests
+  - **Total**: 257 automated tests with TCP connection mocking
 - ✅ **Type checking**: mypy configuration (`mypy.ini`) with strict type checking enabled
 - ✅ **Code quality**: Pre-commit hooks configured with ruff, ruff-format, codespell, bandit
 
 ### Development Achievements
 
-**Platinum Quality Scale Status**: ✅ **ACHIEVED** (v3.0.0)
+**Platinum Quality Scale Status**: ✅ **ACHIEVED** (v3.0.0+)
 
 The integration now meets ALL Platinum quality requirements:
-1. ✅ **Bronze**: Automated test suite with 100+ tests
+1. ✅ **Bronze**: Automated test suite with 257 tests
 2. ✅ **Silver**: Comprehensive troubleshooting documentation
 3. ✅ **Gold**: Extensive test coverage across all critical components
 4. ✅ **Platinum**: Complete implementation
    - ✅ Full type annotations in all critical modules
    - ✅ Comprehensive code comments explaining complex logic
-   - ✅ Optimized async performance
-   - ✅ 100+ automated tests covering protocol, controller, model, and platforms
+   - ✅ Optimized async performance with orjson
+   - ✅ 257 automated tests covering protocol, controller, model, and platforms
    - ✅ mypy type checking configured
    - ✅ All pre-commit hooks passing
 
 **Platinum Achievements Summary**:
 - **Type Safety**: Complete type annotations with mypy strict mode
 - **Code Documentation**: Detailed docstrings and comments throughout
-- **Test Coverage**: 100+ tests across 8 test files
-- **Performance**: Optimized async architecture with minimal network overhead
-- **Code Quality**: Automated linting and formatting with pre-commit hooks
+- **Test Coverage**: 257 tests across 14 test files (~90% coverage)
+- **Performance**: Optimized async architecture with orjson and minimal network overhead
+- **Code Quality**: Automated linting and formatting with ruff
+- **Production Hardening**: Circuit breaker, connection metrics, health monitoring
+- **User Configuration**: Options flow for keepalive and reconnect settings
 
 ## Caveats and Limitations
 
 - Only tested with original author's pool configuration - may not work with all equipment (chemistry, multiple heaters, cascades, etc.)
 - Changing metric/English units while integration is running can cause incorrect values
 - Recommended to reload integration after significant pool configuration changes
-- Limited automated test coverage - requires physical hardware for full validation
+- Physical hardware testing recommended for new equipment types (automated tests cover protocol/logic)
+- Use `uv` for dependency management

@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import OnOffControlMixin, PoolEntity, get_controller
-from .pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     CIRCUIT_TYPE,

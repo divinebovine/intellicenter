@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 import pytest
 
 from custom_components.intellicenter import DOMAIN
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     HEATER_ATTR,
     HEATER_TYPE,

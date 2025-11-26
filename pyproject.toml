@@ -73,3 +73,12 @@ norecursedirs = [
     ".venv",
     "venv",
 ]
+
+[dependency-groups]
+dev = [
+    "homeassistant>=2024.3.3",
+]
+
+# Note: pyintellicenter is installed from local path during development:
+#   uv pip install -e ../pyintellicenter
+# For production, it will be installed via manifest.json requirements

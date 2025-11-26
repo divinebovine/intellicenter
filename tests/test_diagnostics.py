@@ -11,8 +11,8 @@ from custom_components.intellicenter import DOMAIN
 from custom_components.intellicenter.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from custom_components.intellicenter.pyintellicenter import PoolModel
-from custom_components.intellicenter.pyintellicenter.attributes import (
+from pyintellicenter import PoolModel
+from pyintellicenter import (
     BODY_TYPE,
     CIRCUIT_TYPE,
 )

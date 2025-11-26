@@ -13,7 +13,7 @@ from custom_components.intellicenter.binary_sensor import (
     HeaterBinarySensor,
     PoolBinarySensor,
 )
-from custom_components.intellicenter.pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     CIRCUIT_TYPE,
     HEATER_ATTR,

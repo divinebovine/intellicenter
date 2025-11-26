@@ -37,7 +37,7 @@ from .const import (
     DEFAULT_RECONNECT_DELAY,
     DOMAIN,
 )
-from .pyintellicenter import (
+from pyintellicenter import (
     ACT_ATTR,
     BODY_ATTR,
     BODY_TYPE,

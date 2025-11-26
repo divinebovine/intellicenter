@@ -23,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import PoolEntity, get_controller
 from .const import CONST_GPM, CONST_RPM
-from .pyintellicenter import (
+from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     GPM_ATTR,
