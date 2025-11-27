@@ -9,9 +9,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ============================================
-  # Stage 1: Code Quality
-  # ============================================
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -35,9 +32,6 @@ jobs:
       - name: Type check (mypy)
         run: mypy custom_components/intellicenter/ --ignore-missing-imports
 
-  # ============================================
-  # Stage 2a: Tests (parallel with Quality Scale)
-  # ============================================
   tests:
     name: Tests
     runs-on: ubuntu-latest
@@ -64,230 +58,95 @@ jobs:
           echo "count=$count" >> $GITHUB_OUTPUT
           echo "Test count: $count"
 
-  # ============================================
-  # Stage 2b: Quality Scale (parallel with Tests)
-  # ============================================
-  bronze:
-    name: "Bronze"
+  quality-scale:
+    name: Quality Scale
     runs-on: ubuntu-latest
-    needs: [code-quality]
+    needs: [code-quality, tests]
     steps:
       - uses: actions/checkout@v4
-      - name: Bronze checks
+
+      # Bronze
+      - name: "Bronze: Config flow"
+        run: test -f custom_components/intellicenter/config_flow.py
+
+      - name: "Bronze: Strings"
+        run: test -f custom_components/intellicenter/strings.json
+
+      - name: "Bronze: README"
+        run: test -f README.md
+
+      - name: "Bronze: Tests directory"
+        run: test -d tests/
+
+      # Silver
+      - name: "Silver: Troubleshooting docs"
+        run: grep -q "## Troubleshooting" README.md
+
+      - name: "Silver: Debug logging docs"
+        run: grep -qi "debug" README.md
+
+      - name: "Silver: Error recovery"
+        run: grep -rq "reconnect\|backoff\|retry" custom_components/intellicenter/
+
+      # Gold
+      - name: "Gold: Zeroconf discovery"
+        run: grep -q "zeroconf" custom_components/intellicenter/manifest.json
+
+      - name: "Gold: Translations (2+)"
         run: |
-          echo "## Bronze Tier" >> $GITHUB_STEP_SUMMARY
-          passed=true
+          count=$(ls -1 custom_components/intellicenter/translations/*.json 2>/dev/null | wc -l)
+          echo "Found $count translations"
+          [ "$count" -ge 2 ]
 
-          # Config flow
-          if test -f custom_components/intellicenter/config_flow.py; then
-            echo "✅ Config flow exists" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Config flow missing" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
+      - name: "Gold: Options flow"
+        run: grep -q "OptionsFlow\|async_get_options_flow" custom_components/intellicenter/config_flow.py
 
-          # Strings
-          if test -f custom_components/intellicenter/strings.json; then
-            echo "✅ Strings file exists" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Strings file missing" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
+      - name: "Gold: Diagnostics"
+        run: grep -q "async_get_config_entry_diagnostics" custom_components/intellicenter/diagnostics.py
 
-          # README
-          if test -f README.md; then
-            echo "✅ README exists" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ README missing" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Tests directory
-          if test -d tests/; then
-            echo "✅ Tests directory exists" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Tests directory missing" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          if [ "$passed" = "false" ]; then exit 1; fi
-
-  silver:
-    name: "Silver"
-    runs-on: ubuntu-latest
-    needs: [bronze]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Silver checks
+      # Platinum
+      - name: "Platinum: 100+ tests"
         run: |
-          echo "## Silver Tier" >> $GITHUB_STEP_SUMMARY
-          passed=true
-
-          # Troubleshooting docs
-          if grep -q "## Troubleshooting" README.md; then
-            echo "✅ Troubleshooting documentation" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing troubleshooting docs" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Debug logging docs
-          if grep -qi "debug" README.md; then
-            echo "✅ Debug logging documented" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing debug logging docs" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Error recovery
-          if grep -rq "reconnect\|backoff\|retry" custom_components/intellicenter/; then
-            echo "✅ Error recovery implemented" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing error recovery" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          if [ "$passed" = "false" ]; then exit 1; fi
-
-  gold:
-    name: "Gold"
-    runs-on: ubuntu-latest
-    needs: [silver]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Gold checks
-        run: |
-          echo "## Gold Tier" >> $GITHUB_STEP_SUMMARY
-          passed=true
-
-          # Zeroconf discovery
-          if grep -q "zeroconf" custom_components/intellicenter/manifest.json; then
-            echo "✅ Zeroconf discovery" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing Zeroconf" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Translations (2+ languages)
-          trans_count=$(ls -1 custom_components/intellicenter/translations/*.json 2>/dev/null | wc -l)
-          if [ "$trans_count" -ge 2 ]; then
-            echo "✅ Translations ($trans_count languages)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Need 2+ translations (found $trans_count)" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Options flow
-          if grep -q "OptionsFlow\|async_get_options_flow" custom_components/intellicenter/config_flow.py; then
-            echo "✅ Options flow (reconfiguration)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing options flow" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Diagnostics
-          if grep -q "async_get_config_entry_diagnostics" custom_components/intellicenter/diagnostics.py 2>/dev/null; then
-            echo "✅ Diagnostics support" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing diagnostics" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          if [ "$passed" = "false" ]; then exit 1; fi
-
-  platinum:
-    name: "Platinum"
-    runs-on: ubuntu-latest
-    needs: [gold, tests]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Platinum checks
-        run: |
-          echo "## Platinum Tier" >> $GITHUB_STEP_SUMMARY
-          passed=true
-
-          # 100+ tests
           test_count=${{ needs.tests.outputs.test_count }}
-          if [ "$test_count" -ge 100 ]; then
-            echo "✅ 100+ tests ($test_count tests)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Need 100+ tests (found $test_count)" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
+          echo "Test count: $test_count"
+          [ "$test_count" -ge 100 ]
 
-          # Type annotations (already passed in code-quality)
-          echo "✅ Type annotations (mypy passed)" >> $GITHUB_STEP_SUMMARY
+      - name: "Platinum: Async implementation"
+        run: grep -rq "async def" custom_components/intellicenter/*.py
 
-          # Async implementation
-          if grep -rq "async def" custom_components/intellicenter/*.py; then
-            echo "✅ Async implementation" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Missing async implementation" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
-
-          # Code documentation
+      - name: "Platinum: Code documentation (20+ docstrings)"
+        run: |
           doc_count=$(grep -r '"""' custom_components/intellicenter/*.py | wc -l)
-          if [ "$doc_count" -ge 20 ]; then
-            echo "✅ Code documentation ($doc_count docstrings)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Need more documentation (found $doc_count)" >> $GITHUB_STEP_SUMMARY
-            passed=false
-          fi
+          echo "Docstring count: $doc_count"
+          [ "$doc_count" -ge 20 ]
 
-          if [ "$passed" = "false" ]; then exit 1; fi
-
-  # ============================================
-  # Stage 3: Summary
-  # ============================================
   summary:
-    name: "Summary"
+    name: Summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [code-quality, tests, bronze, silver, gold, platinum]
+    needs: [code-quality, tests, quality-scale]
     steps:
       - name: Generate report
         run: |
           echo "# CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "## Code Quality" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.code-quality.result }}" = "success" ]; then
-            echo "✅ Lint, Type Check, Security" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          [ "${{ needs.code-quality.result }}" = "success" ] && cq="✅" || cq="❌"
+          [ "${{ needs.tests.result }}" = "success" ] && ts="✅" || ts="❌"
+          [ "${{ needs.quality-scale.result }}" = "success" ] && qs="✅" || qs="❌"
+
+          echo "| Code Quality | $cq |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests (${{ needs.tests.outputs.test_count }}) | $ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Scale | $qs |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quality-scale.result }}" = "success" ]; then
+            echo "**Quality Tier: 💎 Platinum**" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ Code Quality Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Tests" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.tests.result }}" = "success" ]; then
-            echo "✅ ${{ needs.tests.outputs.test_count }} tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Tests Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Quality Scale" >> $GITHUB_STEP_SUMMARY
-          echo "| Tier | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-
-          [ "${{ needs.bronze.result }}" = "success" ] && echo "| Bronze | ✅ |" >> $GITHUB_STEP_SUMMARY || echo "| Bronze | ❌ |" >> $GITHUB_STEP_SUMMARY
-          [ "${{ needs.silver.result }}" = "success" ] && echo "| Silver | ✅ |" >> $GITHUB_STEP_SUMMARY || [ "${{ needs.silver.result }}" = "skipped" ] && echo "| Silver | ⏭️ |" >> $GITHUB_STEP_SUMMARY || echo "| Silver | ❌ |" >> $GITHUB_STEP_SUMMARY
-          [ "${{ needs.gold.result }}" = "success" ] && echo "| Gold | ✅ |" >> $GITHUB_STEP_SUMMARY || [ "${{ needs.gold.result }}" = "skipped" ] && echo "| Gold | ⏭️ |" >> $GITHUB_STEP_SUMMARY || echo "| Gold | ❌ |" >> $GITHUB_STEP_SUMMARY
-          [ "${{ needs.platinum.result }}" = "success" ] && echo "| Platinum | ✅ |" >> $GITHUB_STEP_SUMMARY || [ "${{ needs.platinum.result }}" = "skipped" ] && echo "| Platinum | ⏭️ |" >> $GITHUB_STEP_SUMMARY || echo "| Platinum | ❌ |" >> $GITHUB_STEP_SUMMARY
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Determine tier
-          tier="❌ None"
-          [ "${{ needs.bronze.result }}" = "success" ] && tier="🥉 Bronze"
-          [ "${{ needs.silver.result }}" = "success" ] && tier="🥈 Silver"
-          [ "${{ needs.gold.result }}" = "success" ] && tier="🥇 Gold"
-          [ "${{ needs.platinum.result }}" = "success" ] && tier="💎 Platinum"
-
-          echo "**Achieved: $tier**" >> $GITHUB_STEP_SUMMARY
-
-          # Fail if not platinum
-          if [ "${{ needs.platinum.result }}" != "success" ]; then
+            echo "**Quality Tier: ❌ Failed**" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
