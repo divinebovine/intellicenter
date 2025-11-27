@@ -104,7 +104,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio \
             pytest-homeassistant-custom-component pytest-cov \
-            pyintellicenter
+            "pyintellicenter>=0.1.1"
 
       - name: Run pytest
         run: |
@@ -232,7 +232,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio \
             pytest-homeassistant-custom-component \
-            pyintellicenter
+            "pyintellicenter>=0.1.1"
 
       - name: Run connection error tests
         run: |
@@ -486,7 +486,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio \
             pytest-homeassistant-custom-component pytest-cov \
-            pyintellicenter
+            "pyintellicenter>=0.1.1"
 
       - name: Run comprehensive test suite
         run: |
@@ -734,7 +734,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio \
             pytest-homeassistant-custom-component pytest-cov \
-            pyintellicenter
+            "pyintellicenter>=0.1.1"
 
       - name: Run comprehensive test suite
         run: |
