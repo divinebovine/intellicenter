@@ -1,7 +1,10 @@
 """Config flow for Pentair Intellicenter integration.
 
 This module handles the configuration flow for setting up the IntelliCenter
-integration, including manual user setup and Zeroconf discovery.
+integration, including:
+- Manual user setup with IP address entry
+- Library-based network discovery
+- Zeroconf auto-discovery
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ import ipaddress
 import logging
 from typing import Any
 
+from homeassistant.components import zeroconf
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow as HAConfigFlow,
@@ -19,8 +23,22 @@ from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.typing import ConfigType
+from pyintellicenter import ICBaseController, ICSystemInfo
 import voluptuous as vol
+
+# Import discovery - available in pyintellicenter 0.0.4+
+try:
+    from pyintellicenter import ICUnit, discover_intellicenter_units
+
+    DISCOVERY_AVAILABLE = True
+except ImportError:
+    DISCOVERY_AVAILABLE = False
 
 from .const import (
     CONF_KEEPALIVE_INTERVAL,
@@ -33,49 +51,41 @@ from .const import (
     MIN_KEEPALIVE_INTERVAL,
     MIN_RECONNECT_DELAY,
 )
-from pyintellicenter import BaseController, SystemInfo
 
 _LOGGER = logging.getLogger(__name__)
 
+# Discovery timeout in seconds
+DISCOVERY_TIMEOUT = 10.0
 
-class CannotConnect(HomeAssistantError):  # type: ignore[misc]
+# Setup method options
+SETUP_DISCOVER = "discover"
+SETUP_MANUAL = "manual"
+
+
+class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
 
-class InvalidHost(HomeAssistantError):  # type: ignore[misc]
+class InvalidHost(HomeAssistantError):
     """Error to indicate the host is invalid."""
 
 
 def _validate_host(host: str) -> str:
-    """Validate and return the host address.
-
-    Args:
-        host: IP address or hostname to validate.
-
-    Returns:
-        The validated host string (stripped of whitespace).
-
-    Raises:
-        InvalidHost: If the host is empty or invalid.
-    """
+    """Validate and return the host address."""
     host = host.strip()
     if not host:
         raise InvalidHost("Host cannot be empty")
 
-    # Try to parse as IP address for validation
     try:
         ipaddress.ip_address(host)
     except ValueError as err:
-        # Not a valid IP, but could be a hostname
-        # Basic hostname validation: must contain at least one character
-        # and no spaces
         if " " in host or not host:
             raise InvalidHost(f"Invalid host: {host}") from err
 
     return host
 
 
-class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
+class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Pentair Intellicenter config flow."""
 
     VERSION = 1
@@ -85,17 +95,99 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
         """Initialize a new Intellicenter ConfigFlow."""
         self._discovered_host: str | None = None
         self._discovered_name: str | None = None
+        self._discovered_units: list[ICUnit] = []
 
     @staticmethod
-    @callback  # type: ignore[misc]
+    @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlowHandler:
         """Get the options flow for this handler."""
         return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input: ConfigType | None = None) -> FlowResult:
-        """Handle a flow initiated by the user."""
+        """Handle a flow initiated by the user.
+
+        Presents options to discover devices or enter manually.
+        """
         if user_input is None:
-            return self._show_setup_form()
+            return self._show_pick_method_form()
+
+        # User selected a setup method
+        if user_input.get("setup_method") == SETUP_DISCOVER:
+            return await self.async_step_discover()
+        return await self.async_step_manual()
+
+    async def async_step_discover(
+        self, user_input: ConfigType | None = None
+    ) -> FlowResult:
+        """Handle the discovery step."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # User selected a device from the list
+            selected = user_input.get("device")
+            if selected:
+                # Find the selected unit
+                for unit in self._discovered_units:
+                    if unit.host == selected:
+                        return await self._async_create_entry_from_unit(unit)
+
+                # Try to connect with the selected host
+                try:
+                    host = _validate_host(selected)
+                    system_info = await self._get_system_info(host)
+
+                    await self.async_set_unique_id(system_info.unique_id)
+                    self._abort_if_unique_id_configured()
+
+                    return self.async_create_entry(
+                        title=system_info.prop_name, data={CONF_HOST: host}
+                    )
+                except AbortFlow:
+                    raise
+                except InvalidHost:
+                    errors["base"] = "invalid_host"
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except Exception:
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+
+        # Perform discovery using HA's shared Zeroconf instance
+        if DISCOVERY_AVAILABLE:
+            try:
+                zc = await zeroconf.async_get_instance(self.hass)
+                self._discovered_units = await discover_intellicenter_units(
+                    discovery_timeout=DISCOVERY_TIMEOUT,
+                    zeroconf=zc,
+                )
+            except Exception:
+                _LOGGER.exception("Discovery failed")
+                self._discovered_units = []
+        else:
+            self._discovered_units = []
+
+        if not self._discovered_units:
+            # No devices found, show message and option to enter manually
+            return self._show_no_devices_form(errors)
+
+        # Filter out already configured devices
+        available_units = []
+        for unit in self._discovered_units:
+            if not self._host_already_configured(unit.host):
+                available_units.append(unit)
+
+        if not available_units:
+            return self.async_abort(reason="already_configured")
+
+        self._discovered_units = available_units
+        return self._show_device_picker_form(errors)
+
+    async def async_step_manual(
+        self, user_input: ConfigType | None = None
+    ) -> FlowResult:
+        """Handle manual IP entry step."""
+        if user_input is None:
+            return self._show_manual_form()
 
         errors: dict[str, str] = {}
 
@@ -103,28 +195,27 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
             host = _validate_host(user_input[CONF_HOST])
             system_info = await self._get_system_info(host)
 
-            # Check if already configured
-            await self.async_set_unique_id(system_info.uniqueID)
+            await self.async_set_unique_id(system_info.unique_id)
             self._abort_if_unique_id_configured()
 
             return self.async_create_entry(
-                title=system_info.propName, data={CONF_HOST: host}
+                title=system_info.prop_name, data={CONF_HOST: host}
             )
         except AbortFlow:
-            raise  # Re-raise abort flow to properly abort
+            raise
         except InvalidHost:
             errors["base"] = "invalid_host"
         except CannotConnect:
             errors["base"] = "cannot_connect"
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
 
-        return self._show_setup_form(errors)
+        return self._show_manual_form(errors)
 
     async def async_step_zeroconf(self, discovery_info: ConfigType) -> FlowResult:
         """Handle device found via zeroconf."""
-        _LOGGER.debug(f"zeroconf discovery {discovery_info}")
+        _LOGGER.debug("Zeroconf discovery: %s", discovery_info)
 
         host = str(discovery_info.host)
 
@@ -134,29 +225,27 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
         try:
             system_info = await self._get_system_info(host)
 
-            await self.async_set_unique_id(system_info.uniqueID)
-
-            # If there is already a flow for this system, update the host IP address
+            await self.async_set_unique_id(system_info.unique_id)
             self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
             self._discovered_host = host
-            self._discovered_name = system_info.propName
+            self._discovered_name = system_info.prop_name
 
             self.context.update(
                 {
                     CONF_HOST: host,
-                    CONF_NAME: system_info.propName,
-                    "title_placeholders": {"name": system_info.propName},
+                    CONF_NAME: system_info.prop_name,
+                    "title_placeholders": {"name": system_info.prop_name},
                 }
             )
 
             return self._show_confirm_dialog()
 
         except AbortFlow:
-            raise  # Re-raise abort flow to properly abort
+            raise
         except CannotConnect:
             return self.async_abort(reason="cannot_connect")
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             _LOGGER.exception("Unexpected exception")
             return self.async_abort(reason="unknown")
 
@@ -174,32 +263,99 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
         try:
             system_info = await self._get_system_info(host)
 
-            # Check if already configured
-            await self.async_set_unique_id(system_info.uniqueID)
+            await self.async_set_unique_id(system_info.unique_id)
             self._abort_if_unique_id_configured()
 
         except AbortFlow:
-            raise  # Re-raise abort flow to properly abort
+            raise
         except CannotConnect:
             return self.async_abort(reason="cannot_connect")
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             _LOGGER.exception("Unexpected exception")
             return self.async_abort(reason="unknown")
 
         return self.async_create_entry(
-            title=system_info.propName, data={CONF_HOST: host}
+            title=system_info.prop_name, data={CONF_HOST: host}
         )
 
-    def _show_setup_form(self, errors: dict[str, str] | None = None) -> FlowResult:
-        """Show the setup form to the user."""
+    def _show_pick_method_form(
+        self, errors: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Show the form to pick setup method."""
+        options = [
+            {"value": SETUP_MANUAL, "label": "Enter IP address manually"},
+        ]
+
+        if DISCOVERY_AVAILABLE:
+            options.insert(
+                0, {"value": SETUP_DISCOVER, "label": "Discover devices on network"}
+            )
+
         return self.async_show_form(
             step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "setup_method",
+                        default=SETUP_DISCOVER if DISCOVERY_AVAILABLE else SETUP_MANUAL,
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+            errors=errors or {},
+        )
+
+    def _show_device_picker_form(
+        self, errors: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Show the form to pick a discovered device."""
+        options = [
+            {
+                "value": unit.host,
+                "label": f"{unit.name} ({unit.host})",
+            }
+            for unit in self._discovered_units
+        ]
+
+        return self.async_show_form(
+            step_id="discover",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("device"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+            errors=errors or {},
+            description_placeholders={"count": str(len(self._discovered_units))},
+        )
+
+    def _show_no_devices_form(self, errors: dict[str, str] | None = None) -> FlowResult:
+        """Show form when no devices are found."""
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=vol.Schema({vol.Required(CONF_HOST): str}),
+            errors=errors or {},
+            description_placeholders={"reason": "no_devices_found"},
+        )
+
+    def _show_manual_form(self, errors: dict[str, str] | None = None) -> FlowResult:
+        """Show the manual setup form."""
+        return self.async_show_form(
+            step_id="manual",
             data_schema=vol.Schema({vol.Required(CONF_HOST): str}),
             errors=errors or {},
         )
 
     def _show_confirm_dialog(self) -> FlowResult:
-        """Show the confirm dialog to the user."""
+        """Show the confirm dialog for zeroconf discovery."""
         host = self._discovered_host or self.context.get(CONF_HOST)
         name = self._discovered_name or self.context.get(CONF_NAME)
 
@@ -208,29 +364,35 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
             description_placeholders={"host": host, "name": name},
         )
 
-    async def _get_system_info(self, host: str) -> SystemInfo:
-        """Attempt to connect to the host and retrieve basic system information.
+    async def _async_create_entry_from_unit(self, unit: ICUnit) -> FlowResult:
+        """Create a config entry from a discovered unit."""
+        try:
+            system_info = await self._get_system_info(unit.host)
 
-        Args:
-            host: The IP address or hostname of the IntelliCenter system.
+            await self.async_set_unique_id(system_info.unique_id)
+            self._abort_if_unique_id_configured()
 
-        Returns:
-            SystemInfo object with pool system information.
+            return self.async_create_entry(
+                title=system_info.prop_name, data={CONF_HOST: unit.host}
+            )
+        except AbortFlow:
+            raise
+        except CannotConnect as err:
+            raise CannotConnect from err
 
-        Raises:
-            CannotConnect: If unable to connect to the IntelliCenter.
-        """
-        controller = BaseController(host, loop=self.hass.loop)
+    async def _get_system_info(self, host: str) -> ICSystemInfo:
+        """Attempt to connect and retrieve system information."""
+        controller = ICBaseController(host)
 
         try:
             await controller.start()
-            if controller.systemInfo is None:
+            if controller.system_info is None:
                 raise CannotConnect("System info not available")
-            return controller.systemInfo
+            return controller.system_info
         except (ConnectionRefusedError, OSError, TimeoutError) as err:
             raise CannotConnect from err
         finally:
-            controller.stop()
+            await controller.stop()
 
     def _host_already_configured(self, host: str) -> bool:
         """Check if we already have a system with the same host address."""
@@ -242,7 +404,7 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg, misc]
         return host in existing_hosts
 
 
-class OptionsFlowHandler(OptionsFlow):  # type: ignore[misc]
+class OptionsFlowHandler(OptionsFlow):
     """Handle options flow for Pentair IntelliCenter integration."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
@@ -252,16 +414,10 @@ class OptionsFlowHandler(OptionsFlow):  # type: ignore[misc]
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manage the options for IntelliCenter integration.
-
-        Allows configuration of:
-        - Keepalive interval: How often to send keepalive queries
-        - Reconnect delay: Initial delay before reconnection attempts
-        """
+        """Manage the options for IntelliCenter integration."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get current values or defaults
         current_keepalive = self.config_entry.options.get(
             CONF_KEEPALIVE_INTERVAL, DEFAULT_KEEPALIVE_INTERVAL
         )

@@ -9,13 +9,12 @@ from homeassistant.exceptions import ConfigEntryNotReady
 import pytest
 
 from custom_components.intellicenter import (
-    DOMAIN,
     PLATFORMS,
-    PoolConnectionHandler,
     async_setup,
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.intellicenter.coordinator import IntelliCenterCoordinator
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,61 +36,30 @@ async def test_async_setup_entry_success(
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock()
 
-    # Mock the handler's start method
-    with patch(
-        "custom_components.intellicenter.ModelController"
-    ) as mock_controller_class:
-        mock_controller = MagicMock()
-        mock_controller.systemInfo.propName = "Test Pool System"
-        mock_controller.model = MagicMock()
-        mock_controller.model.__iter__ = MagicMock(return_value=iter([]))
-        mock_controller_class.return_value = mock_controller
+    # Mock the coordinator's async_start method
+    with patch.object(
+        IntelliCenterCoordinator,
+        "async_start",
+        new_callable=AsyncMock,
+    ):
+        with patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new_callable=AsyncMock,
+        ) as mock_forward:
+            result = await async_setup_entry(hass, entry)
 
-        # Create a MockPoolConnectionHandler class with async methods
-        class MockPoolConnectionHandler:
-            """Mock PoolConnectionHandler for testing."""
+            assert result is True
 
-            def __init__(self, hass, entry_id, controller, *args, **kwargs):
-                self.controller = controller
+            # Verify coordinator is stored in runtime_data
+            assert entry.runtime_data is not None
+            assert isinstance(entry.runtime_data, IntelliCenterCoordinator)
 
-            async def start(self):
-                """Mock async start method that calls started callback."""
-                # Call the started callback to trigger platform setup
-                if hasattr(self, "started"):
-                    self.started(self.controller)
+            # Wait a bit for the async task to complete
+            await hass.async_block_till_done()
 
-            def stop(self):
-                """Mock stop method."""
-                pass
-
-            def reconnected(self, controller):
-                """Mock reconnected callback."""
-                pass
-
-            def updated(self, controller, updates):
-                """Mock updated callback."""
-                pass
-
-        with patch(
-            "custom_components.intellicenter.PoolConnectionHandler",
-            MockPoolConnectionHandler,
-        ):
-            with patch.object(
-                hass.config_entries,
-                "async_forward_entry_setups",
-                new_callable=AsyncMock,
-            ) as mock_forward:
-                result = await async_setup_entry(hass, entry)
-
-                assert result is True
-                assert DOMAIN in hass.data
-                assert entry.entry_id in hass.data[DOMAIN]
-
-                # Wait a bit for the async task to complete
-                await hass.async_block_till_done()
-
-                # Verify platforms were set up
-                mock_forward.assert_called_once_with(entry, PLATFORMS)
+            # Verify platforms were set up
+            mock_forward.assert_called_once_with(entry, PLATFORMS)
 
 
 async def test_async_setup_entry_connection_failed(hass: HomeAssistant) -> None:
@@ -101,29 +69,15 @@ async def test_async_setup_entry_connection_failed(hass: HomeAssistant) -> None:
     entry.data = {CONF_HOST: "192.168.1.100"}
     entry.options = {}  # No custom options, will use defaults
 
-    with patch(
-        "custom_components.intellicenter.ModelController"
-    ) as mock_controller_class:
-        mock_controller = MagicMock()
-        mock_controller_class.return_value = mock_controller
-
-        # Create a MockPoolConnectionHandler class that raises ConnectionRefusedError
-        class MockPoolConnectionHandler:
-            """Mock PoolConnectionHandler that fails to connect."""
-
-            def __init__(self, hass, entry_id, controller, *args, **kwargs):
-                self.controller = controller
-
-            async def start(self):
-                """Mock async start that raises ConnectionRefusedError."""
-                raise ConnectionRefusedError()
-
-        with patch(
-            "custom_components.intellicenter.PoolConnectionHandler",
-            MockPoolConnectionHandler,
-        ):
-            with pytest.raises(ConfigEntryNotReady):
-                await async_setup_entry(hass, entry)
+    # Mock coordinator to raise ConnectionRefusedError on start
+    with patch.object(
+        IntelliCenterCoordinator,
+        "async_start",
+        new_callable=AsyncMock,
+        side_effect=ConnectionRefusedError(),
+    ):
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
 
 
 async def test_async_unload_entry(hass: HomeAssistant) -> None:
@@ -133,13 +87,10 @@ async def test_async_unload_entry(hass: HomeAssistant) -> None:
     entry.title = "Test Pool System"
     entry.data = {CONF_HOST: "192.168.1.100"}
 
-    # Set up the handler in hass.data with new structure
-    mock_handler = MagicMock()
-    mock_handler.stop = MagicMock()
-    mock_stop_listener = MagicMock()
-    hass.data[DOMAIN] = {
-        entry.entry_id: {"handler": mock_handler, "stop_listener": mock_stop_listener}
-    }
+    # Set up mock coordinator in runtime_data
+    mock_coordinator = MagicMock(spec=IntelliCenterCoordinator)
+    mock_coordinator.async_stop = AsyncMock()
+    entry.runtime_data = mock_coordinator
 
     with patch.object(
         hass.config_entries,
@@ -151,11 +102,8 @@ async def test_async_unload_entry(hass: HomeAssistant) -> None:
         # Verify async_unload_platforms was called with entry and platforms
         mock_unload.assert_called_once_with(entry, PLATFORMS)
 
-        # Verify handler was stopped
-        mock_handler.stop.assert_called_once()
-
-        # Verify entry was removed from hass.data (domain should be deleted if empty)
-        assert DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]
+        # Verify coordinator was stopped
+        mock_coordinator.async_stop.assert_called_once()
 
         assert result is True
 
@@ -167,12 +115,10 @@ async def test_async_unload_entry_platforms_fail(hass: HomeAssistant) -> None:
     entry.title = "Test Pool System"
     entry.data = {CONF_HOST: "192.168.1.100"}
 
-    # Set up the handler in hass.data with new structure
-    mock_handler = MagicMock()
-    mock_stop_listener = MagicMock()
-    hass.data[DOMAIN] = {
-        entry.entry_id: {"handler": mock_handler, "stop_listener": mock_stop_listener}
-    }
+    # Set up mock coordinator in runtime_data
+    mock_coordinator = MagicMock(spec=IntelliCenterCoordinator)
+    mock_coordinator.async_stop = AsyncMock()
+    entry.runtime_data = mock_coordinator
 
     with patch.object(
         hass.config_entries,
@@ -183,148 +129,135 @@ async def test_async_unload_entry_platforms_fail(hass: HomeAssistant) -> None:
     ):
         result = await async_unload_entry(hass, entry)
 
-        # Handler should still be stopped even if platforms fail
-        mock_handler.stop.assert_called_once()
+        # Coordinator should still be stopped even if platforms fail
+        mock_coordinator.async_stop.assert_called_once()
 
-        # Entry should still be removed (domain should be deleted if empty)
-        assert DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]
-
-        # Now returns False when platforms fail to unload
+        # Returns False when platforms fail to unload
         assert result is False
 
 
+async def test_async_unload_entry_no_runtime_data(hass: HomeAssistant) -> None:
+    """Test unload handles missing runtime_data gracefully."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry_id"
+    entry.title = "Test Pool System"
+    entry.data = {CONF_HOST: "192.168.1.100"}
+
+    # No runtime_data set
+    entry.runtime_data = None
+
+    with patch.object(
+        hass.config_entries,
+        "async_unload_platforms",
+        new_callable=lambda: AsyncMock(return_value=True),
+    ):
+        result = await async_unload_entry(hass, entry)
+
+        # Should complete without error
+        assert result is True
+
+
 # -------------------------------------------------------------------------------------
-# PoolConnectionHandler Tests
+# IntelliCenterCoordinator Tests
 # -------------------------------------------------------------------------------------
 
 
-class TestPoolConnectionHandler:
-    """Tests for the PoolConnectionHandler class."""
+class TestIntelliCenterCoordinator:
+    """Tests for the IntelliCenterCoordinator class."""
 
-    async def test_signal_names(self, hass: HomeAssistant) -> None:
-        """Test that signal names are correctly generated."""
-        mock_controller = MagicMock()
-        entry_id = "test_entry_123"
+    async def test_coordinator_init(self, hass: HomeAssistant) -> None:
+        """Test coordinator initialization."""
+        entry = MagicMock(spec=ConfigEntry)
+        entry.entry_id = "test_entry_123"
+        entry.data = {CONF_HOST: "192.168.1.100"}
 
-        handler = PoolConnectionHandler(
-            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        coordinator = IntelliCenterCoordinator(
+            hass,
+            entry,
+            host="192.168.1.100",
+            keepalive_interval=90,
+            reconnect_delay=30,
         )
 
-        assert handler.update_signal == f"{DOMAIN}_UPDATE_{entry_id}"
-        assert handler.connection_signal == f"{DOMAIN}_CONNECTION_{entry_id}"
+        assert coordinator._host == "192.168.1.100"
+        assert coordinator._keepalive_interval == 90
+        assert coordinator._reconnect_delay == 30
+        assert coordinator.connected is False
 
-    async def test_started_logs_system_info(
-        self, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Test that started() logs the system name."""
-        mock_controller = MagicMock()
-        mock_controller.systemInfo.propName = "My Test Pool"
-        mock_controller.model = MagicMock()
-        mock_controller.model.__iter__ = MagicMock(return_value=iter([]))
+    async def test_coordinator_async_start_and_stop(self, hass: HomeAssistant) -> None:
+        """Test coordinator start and stop."""
+        entry = MagicMock(spec=ConfigEntry)
+        entry.entry_id = "test_entry_123"
+        entry.data = {CONF_HOST: "192.168.1.100"}
 
-        handler = PoolConnectionHandler(
-            hass, "test_entry", mock_controller, timeBetweenReconnects=30
+        coordinator = IntelliCenterCoordinator(
+            hass,
+            entry,
+            host="192.168.1.100",
         )
 
-        handler.started(mock_controller)
+        # Mock the controller
+        with patch.object(
+            coordinator._controller,
+            "start",
+            new_callable=AsyncMock,
+        ):
+            with patch.object(
+                coordinator._controller,
+                "stop",
+                new_callable=AsyncMock,
+            ):
+                await coordinator.async_start()
+                await coordinator.async_stop()
 
-        assert "connected to system: 'My Test Pool'" in caplog.text
+    async def test_coordinator_connected_property(self, hass: HomeAssistant) -> None:
+        """Test coordinator connected property."""
+        entry = MagicMock(spec=ConfigEntry)
+        entry.entry_id = "test_entry_123"
+        entry.data = {CONF_HOST: "192.168.1.100"}
 
-    async def test_started_handles_missing_system_info(
-        self, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Test that started() handles missing system info gracefully."""
-        mock_controller = MagicMock()
-        mock_controller.systemInfo = None
-
-        handler = PoolConnectionHandler(
-            hass, "test_entry", mock_controller, timeBetweenReconnects=30
+        coordinator = IntelliCenterCoordinator(
+            hass,
+            entry,
+            host="192.168.1.100",
         )
 
-        # Should not raise an exception
-        handler.started(mock_controller)
+        # Initially not connected
+        assert coordinator.connected is False
 
-        assert "connected to system: 'Unknown'" in caplog.text
+        # Simulate connection
+        coordinator._connected = True
+        assert coordinator.connected is True
 
-    async def test_reconnected_sends_signal(self, hass: HomeAssistant) -> None:
-        """Test that reconnected() sends the connection signal."""
-        mock_controller = MagicMock()
-        mock_controller.systemInfo.propName = "My Test Pool"
-        entry_id = "test_entry"
+    async def test_coordinator_model_property(self, hass: HomeAssistant) -> None:
+        """Test coordinator model property."""
+        entry = MagicMock(spec=ConfigEntry)
+        entry.entry_id = "test_entry_123"
+        entry.data = {CONF_HOST: "192.168.1.100"}
 
-        handler = PoolConnectionHandler(
-            hass, entry_id, mock_controller, timeBetweenReconnects=30
+        coordinator = IntelliCenterCoordinator(
+            hass,
+            entry,
+            host="192.168.1.100",
         )
 
-        signal_received = []
+        # Model should come from controller
+        model = coordinator.model
+        assert model is not None
 
-        async def signal_handler(is_connected: bool) -> None:
-            signal_received.append(is_connected)
+    async def test_coordinator_system_info_property(self, hass: HomeAssistant) -> None:
+        """Test coordinator system_info property."""
+        entry = MagicMock(spec=ConfigEntry)
+        entry.entry_id = "test_entry_123"
+        entry.data = {CONF_HOST: "192.168.1.100"}
 
-        hass.helpers.dispatcher.async_dispatcher_connect(
-            handler.connection_signal, signal_handler
+        coordinator = IntelliCenterCoordinator(
+            hass,
+            entry,
+            host="192.168.1.100",
         )
 
-        handler.reconnected(mock_controller)
-        await hass.async_block_till_done()
-
-        assert signal_received == [True]
-
-    async def test_disconnected_sends_signal(self, hass: HomeAssistant) -> None:
-        """Test that disconnected() sends the connection signal."""
-        mock_controller = MagicMock()
-        mock_controller.systemInfo.propName = "My Test Pool"
-        entry_id = "test_entry"
-
-        handler = PoolConnectionHandler(
-            hass, entry_id, mock_controller, timeBetweenReconnects=30
-        )
-
-        signal_received = []
-
-        async def signal_handler(is_connected: bool) -> None:
-            signal_received.append(is_connected)
-
-        hass.helpers.dispatcher.async_dispatcher_connect(
-            handler.connection_signal, signal_handler
-        )
-
-        handler.disconnected(mock_controller, None)
-        await hass.async_block_till_done()
-
-        assert signal_received == [False]
-
-    async def test_updated_sends_signal(self, hass: HomeAssistant) -> None:
-        """Test that updated() sends the update signal with updates."""
-        mock_controller = MagicMock()
-        entry_id = "test_entry"
-
-        handler = PoolConnectionHandler(
-            hass, entry_id, mock_controller, timeBetweenReconnects=30
-        )
-
-        signal_received = []
-        test_updates = {"obj1": {"attr1": "val1"}}
-
-        async def signal_handler(updates: dict) -> None:
-            signal_received.append(updates)
-
-        hass.helpers.dispatcher.async_dispatcher_connect(
-            handler.update_signal, signal_handler
-        )
-
-        handler.updated(mock_controller, test_updates)
-        await hass.async_block_till_done()
-
-        assert signal_received == [test_updates]
-
-    async def test_custom_reconnect_delay(self, hass: HomeAssistant) -> None:
-        """Test that custom reconnect delay is used."""
-        mock_controller = MagicMock()
-
-        handler = PoolConnectionHandler(
-            hass, "test_entry", mock_controller, timeBetweenReconnects=60
-        )
-
-        # Check that the delay was passed to the parent class
-        assert handler._timeBetweenReconnects == 60
+        # System info should come from controller
+        system_info = coordinator.system_info
+        # Initially None since controller hasn't started
+        assert system_info is None or system_info is coordinator._controller.system_info

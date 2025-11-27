@@ -3,18 +3,12 @@
 from unittest.mock import MagicMock
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONCENTRATION_PARTS_PER_MILLION,
-    CONF_HOST,
     UnitOfPower,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-import pytest
-
-from custom_components.intellicenter import DOMAIN
-from custom_components.intellicenter.const import CONST_GPM, CONST_RPM
 from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
@@ -34,6 +28,9 @@ from pyintellicenter import (
     PoolModel,
     PoolObject,
 )
+import pytest
+
+from custom_components.intellicenter.const import CONST_GPM, CONST_RPM
 from custom_components.intellicenter.sensor import PoolSensor
 
 pytestmark = pytest.mark.asyncio
@@ -120,18 +117,16 @@ def pool_object_intellichlor() -> PoolObject:
 async def test_sensor_setup_creates_entities(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor platform creates entities."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model
 
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -140,7 +135,7 @@ async def test_sensor_setup_creates_entities(
 
     from custom_components.intellicenter.sensor import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create sensors for:
     # - SENSE1 (air temp)
@@ -153,18 +148,11 @@ async def test_sensor_setup_creates_entities(
 async def test_temperature_sensor_properties(
     hass: HomeAssistant,
     pool_object_temp_sensor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test temperature sensor properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_temp_sensor,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -181,18 +169,14 @@ async def test_temperature_sensor_properties(
 async def test_temperature_sensor_metric(
     hass: HomeAssistant,
     pool_object_temp_sensor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test temperature sensor with metric units."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: True)
+    # Set uses_metric to True BEFORE creating the sensor
+    type(mock_coordinator.system_info).uses_metric = property(lambda self: True)
 
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_temp_sensor,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -204,16 +188,11 @@ async def test_temperature_sensor_metric(
 async def test_pump_power_sensor(
     hass: HomeAssistant,
     pool_object_pump: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test pump power sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=SensorDeviceClass.POWER,
         unit_of_measurement=UnitOfPower.WATT,
@@ -229,13 +208,9 @@ async def test_pump_power_sensor(
 
 async def test_pump_power_sensor_rounding(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test pump power sensor value rounding."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     pump = PoolObject(
         "PUMP1",
         {
@@ -246,8 +221,7 @@ async def test_pump_power_sensor_rounding(
     )
 
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pump,
         device_class=SensorDeviceClass.POWER,
         unit_of_measurement=UnitOfPower.WATT,
@@ -262,16 +236,11 @@ async def test_pump_power_sensor_rounding(
 async def test_pump_rpm_sensor(
     hass: HomeAssistant,
     pool_object_pump: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test pump RPM sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=None,
         unit_of_measurement=CONST_RPM,
@@ -287,16 +256,11 @@ async def test_pump_rpm_sensor(
 async def test_pump_gpm_sensor(
     hass: HomeAssistant,
     pool_object_pump: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test pump GPM sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=None,
         unit_of_measurement=CONST_GPM,
@@ -311,19 +275,12 @@ async def test_pump_gpm_sensor(
 async def test_body_temperature_sensors(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test body temperature sensors."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
-
     # Last temp sensor
     last_temp = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=LSTTMP_ATTR,
@@ -335,8 +292,7 @@ async def test_body_temperature_sensors(
 
     # Desired temp sensor
     desired_temp = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=LOTMP_ATTR,
@@ -349,16 +305,11 @@ async def test_body_temperature_sensors(
 async def test_intellichem_ph_sensor(
     hass: HomeAssistant,
     pool_object_intellichem: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test IntelliChem pH sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichem,
         device_class=None,
         attribute_key=PHVAL_ATTR,
@@ -372,16 +323,11 @@ async def test_intellichem_ph_sensor(
 async def test_intellichem_orp_sensor(
     hass: HomeAssistant,
     pool_object_intellichem: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test IntelliChem ORP sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichem,
         device_class=None,
         attribute_key=ORPVAL_ATTR,
@@ -394,16 +340,11 @@ async def test_intellichem_orp_sensor(
 async def test_intellichem_tank_level_sensors(
     hass: HomeAssistant,
     pool_object_intellichem: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test IntelliChem tank level sensors."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     ph_tank = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichem,
         device_class=None,
         attribute_key=PHTNK_ATTR,
@@ -413,8 +354,7 @@ async def test_intellichem_tank_level_sensors(
     assert ph_tank.native_value == 5
 
     orp_tank = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichem,
         device_class=None,
         attribute_key=ORPTNK_ATTR,
@@ -427,16 +367,11 @@ async def test_intellichem_tank_level_sensors(
 async def test_intellichlor_salt_sensor(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test IntelliChlor salt sensor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         device_class=None,
         unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
@@ -450,13 +385,9 @@ async def test_intellichlor_salt_sensor(
 
 async def test_sensor_native_value_none(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor native_value when attribute is None."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     obj = PoolObject(
         "SENSE1",
         {
@@ -467,8 +398,7 @@ async def test_sensor_native_value_none(
     )
 
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         obj,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -479,13 +409,9 @@ async def test_sensor_native_value_none(
 
 async def test_sensor_native_value_invalid_returns_string(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor native_value returns string for non-numeric values."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     obj = PoolObject(
         "SENSE1",
         {
@@ -496,8 +422,7 @@ async def test_sensor_native_value_invalid_returns_string(
     )
 
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         obj,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -510,16 +435,11 @@ async def test_sensor_native_value_invalid_returns_string(
 async def test_sensor_is_updated(
     hass: HomeAssistant,
     pool_object_temp_sensor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor isUpdated method."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_temp_sensor,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -538,18 +458,11 @@ async def test_sensor_is_updated(
 async def test_sensor_state_updates(
     hass: HomeAssistant,
     pool_object_temp_sensor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor state updates from IntelliCenter."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
-
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_temp_sensor,
         device_class=SensorDeviceClass.TEMPERATURE,
         attribute_key=SOURCE_ATTR,
@@ -572,17 +485,12 @@ async def test_sensor_state_updates(
 async def test_sensor_unique_id_with_attribute(
     hass: HomeAssistant,
     pool_object_pump: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test sensor unique ID includes attribute key."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     # Power sensor
     power = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=SensorDeviceClass.POWER,
         attribute_key=PWR_ATTR,
@@ -591,8 +499,7 @@ async def test_sensor_unique_id_with_attribute(
 
     # RPM sensor
     rpm = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=None,
         attribute_key=RPM_ATTR,
@@ -601,8 +508,7 @@ async def test_sensor_unique_id_with_attribute(
 
     # GPM sensor
     gpm = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_pump,
         device_class=None,
         attribute_key=GPM_ATTR,
@@ -610,13 +516,10 @@ async def test_sensor_unique_id_with_attribute(
     assert gpm.unique_id == "test_entry_PUMP1GPM"
 
 
-async def test_ph_sensor_device_class(hass: HomeAssistant) -> None:
+async def test_ph_sensor_device_class(
+    hass: HomeAssistant, mock_coordinator: MagicMock
+) -> None:
     """Test that pH sensors have the correct device class."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     # Create a chemistry object with pH sensor
     chem_obj = PoolObject(
         "CHEM1",
@@ -629,8 +532,7 @@ async def test_ph_sensor_device_class(hass: HomeAssistant) -> None:
     )
 
     sensor = PoolSensor(
-        entry,
-        mock_controller,
+        mock_coordinator,
         chem_obj,
         device_class=SensorDeviceClass.PH,
         attribute_key=PHVAL_ATTR,

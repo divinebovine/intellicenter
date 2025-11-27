@@ -26,6 +26,52 @@ The integration meets **Platinum** quality scale requirements with:
 - User-configurable options (keepalive, reconnect delay)
 - External `pyintellicenter` library for protocol layer (https://github.com/joyfulhouse/pyintellicenter)
 
+## Related Projects and Navigation
+
+This integration consists of two repositories that work together:
+
+### Project Locations
+
+| Project | Path | Repository |
+|---------|------|------------|
+| **intellicenter** (HA Integration) | `/Users/bryanli/Projects/joyfulhouse/homeassistant-dev/intellicenter` | `joyfulhouse/intellicenter` |
+| **pyintellicenter** (Protocol Library) | `/Users/bryanli/Projects/joyfulhouse/homeassistant-dev/pyintellicenter` | `joyfulhouse/pyintellicenter` |
+
+### When to Edit Each Project
+
+- **intellicenter**: Home Assistant entities, config flow, coordinator, platform logic
+- **pyintellicenter**: TCP connection, protocol handling, model/PoolObject, discovery
+
+### Publishing pyintellicenter to PyPI
+
+When changes are made to pyintellicenter:
+
+1. Bump version in `pyintellicenter/pyproject.toml`
+2. Update requirement in `intellicenter/custom_components/intellicenter/manifest.json`
+3. Commit and push pyintellicenter changes
+4. Create a GitHub release to trigger the publish workflow:
+   ```bash
+   cd /Users/bryanli/Projects/joyfulhouse/homeassistant-dev/pyintellicenter
+   gh release create v0.0.X --title "v0.0.X" --notes "Release notes here"
+   ```
+5. Wait for publish workflow to complete (~60s)
+6. Restart Home Assistant container to pick up new version
+
+### Docker Development
+
+The integration is volume-mounted to the homeassistant-dev container:
+```bash
+# Restart container after changes
+cd /Users/bryanli/Projects/joyfulhouse/homeassistant-dev
+docker compose restart homeassistant
+
+# Check logs for intellicenter
+docker compose logs --since 1m homeassistant 2>&1 | grep -i intellicenter
+
+# Check installed pyintellicenter version
+docker compose exec homeassistant pip show pyintellicenter | grep Version
+```
+
 ## Development Commands
 
 ### Code Quality

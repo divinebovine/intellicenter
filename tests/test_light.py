@@ -1,21 +1,19 @@
 """Test the Pentair IntelliCenter light platform."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from homeassistant.components.light import ATTR_EFFECT
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-import pytest
-
-from custom_components.intellicenter import DOMAIN
-from custom_components.intellicenter.light import LIGHTS_EFFECTS, PoolLight
 from pyintellicenter import (
     ACT_ATTR,
+    LIGHT_EFFECTS,
     STATUS_ATTR,
     PoolModel,
     PoolObject,
 )
+import pytest
+
+from custom_components.intellicenter.light import PoolLight
 
 pytestmark = pytest.mark.asyncio
 
@@ -23,19 +21,16 @@ pytestmark = pytest.mark.asyncio
 async def test_light_setup_creates_entities(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test light platform creates entities for lights in the model."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model
 
-    # Mock the handler with new data structure
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -44,7 +39,7 @@ async def test_light_setup_creates_entities(
 
     from custom_components.intellicenter.light import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create entities for:
     # - LIGHT1 (IntelliBrite light)
@@ -53,7 +48,7 @@ async def test_light_setup_creates_entities(
     assert len(entities_added) == 3
 
     # Verify entity types
-    light_names = [e._poolObject.sname for e in entities_added]
+    light_names = [e._pool_object.sname for e in entities_added]
     assert "Pool Light" in light_names
     assert "Spa Light" in light_names
     assert "Party Show" in light_names
@@ -62,15 +57,10 @@ async def test_light_setup_creates_entities(
 async def test_light_entity_properties(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolLight entity properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Test initial state
     assert light.is_on is False
@@ -81,22 +71,18 @@ async def test_light_entity_properties(
 async def test_light_turn_on_basic(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on a light without effects."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
+    light.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await light.async_turn_on()
 
     # Should request status change to ON
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "LIGHT1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
@@ -105,22 +91,18 @@ async def test_light_turn_on_basic(
 async def test_light_turn_on_with_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on a light with color effect."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
+    light.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await light.async_turn_on(**{ATTR_EFFECT: "Party Mode"})
 
     # Should request status ON and effect PARTY
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "LIGHT1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
@@ -131,18 +113,14 @@ async def test_light_turn_on_with_effect(
 async def test_light_turn_off(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning off a light."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
     # Set light to ON initially
     pool_object_light.update({STATUS_ATTR: "ON"})
 
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
+    light.hass = hass  # Required for async_create_task
 
     assert light.is_on is True
 
@@ -150,8 +128,8 @@ async def test_light_turn_off(
     await light.async_turn_off()
 
     # Should request status change to OFF
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "LIGHT1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "OFF"
@@ -160,14 +138,10 @@ async def test_light_turn_off(
 async def test_light_supports_effects(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test light with color effects support."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Should have effect list
     assert light.effect_list is not None
@@ -179,13 +153,9 @@ async def test_light_supports_effects(
 
 async def test_light_no_effects_support(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test light without color effects support."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     # Create a regular light without color effect support
     regular_light_obj = PoolObject(
         "LIGHT2",
@@ -197,26 +167,22 @@ async def test_light_no_effects_support(
         },
     )
 
-    light = PoolLight(entry, mock_controller, regular_light_obj, None)
+    light = PoolLight(mock_coordinator, regular_light_obj, None)
 
     # Should not support effects
-    assert light._lightEffects is None
+    assert light._light_effects is None
 
 
 async def test_light_current_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test getting current effect."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     # Set light to use PARTY effect
     pool_object_light.update({"USE": "PARTY"})
 
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     assert light.effect == "Party Mode"
 
@@ -224,14 +190,10 @@ async def test_light_current_effect(
 async def test_light_state_updates(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test light state updates from IntelliCenter."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Simulate update from IntelliCenter
     updates = {
@@ -255,19 +217,16 @@ async def test_light_state_updates(
 async def test_light_show_entity(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test light show entity creation and properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
+    mock_coordinator.model = pool_model
 
     show_obj = pool_model["SHOW1"]
 
     # For the light show, we need to add circuit references as children
     # Add a child circuit to the light show
-    pool_model.addObject(
+    pool_model.add_object(
         "SHOW1_CIRC1",
         {
             "OBJTYP": "CIRCGRP",
@@ -276,7 +235,7 @@ async def test_light_show_entity(
         },
     )
 
-    light_show = PoolLight(entry, mock_controller, show_obj, LIGHTS_EFFECTS)
+    light_show = PoolLight(mock_coordinator, show_obj, LIGHT_EFFECTS)
 
     assert light_show.name == "Party Show"
     assert light_show.is_on is False
@@ -285,14 +244,10 @@ async def test_light_show_entity(
 async def test_light_is_not_updated_by_other_objects(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that light ignores updates to other objects."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Update for a different object
     updates = {
@@ -307,14 +262,10 @@ async def test_light_is_not_updated_by_other_objects(
 async def test_light_is_not_updated_by_irrelevant_attributes(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that light ignores irrelevant attribute updates."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Update with irrelevant attributes
     updates = {
@@ -350,18 +301,15 @@ async def test_light_is_not_updated_by_irrelevant_attributes(
 async def test_light_effect_mapping(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
     effect_code: str,
     effect_name: str,
 ) -> None:
     """Test that each effect code maps to correct effect name."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    mock_controller = MagicMock()
-
     # Set light to use this effect
     pool_object_light.update({"USE": effect_code})
 
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     assert light.effect == effect_name
     assert effect_name in light.effect_list
@@ -386,24 +334,20 @@ async def test_light_effect_mapping(
 async def test_light_turn_on_with_each_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
     effect_name: str,
     expected_code: str,
 ) -> None:
     """Test turning on light with each effect sends correct code."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
+    light.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await light.async_turn_on(**{ATTR_EFFECT: effect_name})
 
     # Verify the correct effect code was sent
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "LIGHT1"
     assert args[1][ACT_ATTR] == expected_code
     assert args[1][STATUS_ATTR] == "ON"
@@ -428,14 +372,11 @@ async def test_light_turn_on_with_each_effect(
 async def test_light_state_update_with_each_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
     effect_code: str,
 ) -> None:
     """Test light state updates correctly for each effect code."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    mock_controller = MagicMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Simulate IntelliCenter update with this effect
     updates = {
@@ -453,28 +394,24 @@ async def test_light_state_update_with_each_effect(
 
     # Verify effect is correctly reported
     assert light.is_on is True
-    assert light.effect == LIGHTS_EFFECTS[effect_code]
+    assert light.effect == LIGHT_EFFECTS[effect_code]
 
 
 async def test_light_invalid_effect_ignored(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that invalid effect is ignored when turning on."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
+    light.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await light.async_turn_on(**{ATTR_EFFECT: "Invalid Effect"})
 
     # Should still turn on, but without ACT_ATTR since effect is invalid
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "LIGHT1"
     assert args[1][STATUS_ATTR] == "ON"
     # ACT_ATTR should NOT be present for invalid effect
@@ -484,16 +421,13 @@ async def test_light_invalid_effect_ignored(
 async def test_light_unknown_effect_code_returns_none(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that unknown effect code returns None for effect property."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    mock_controller = MagicMock()
-
     # Set light to use an unknown effect code
     pool_object_light.update({"USE": "UNKNOWN"})
 
-    light = PoolLight(entry, mock_controller, pool_object_light, LIGHTS_EFFECTS)
+    light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
 
     # Effect should be None for unknown codes
     assert light.effect is None

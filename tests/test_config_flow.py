@@ -17,7 +17,8 @@ pytestmark = pytest.mark.asyncio
 async def test_user_flow_success(
     hass: HomeAssistant, mock_controller: MagicMock
 ) -> None:
-    """Test successful user flow."""
+    """Test successful user flow with manual entry."""
+    # Start the flow
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -25,6 +26,16 @@ async def test_user_flow_success(
     assert result["step_id"] == "user"
     assert result["errors"] == {}
 
+    # Select manual entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"setup_method": "manual"},
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "manual"
+
+    # Enter IP address
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {CONF_HOST: "192.168.1.100"},
@@ -45,13 +56,20 @@ async def test_user_flow_cannot_connect(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
+    # Select manual entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"setup_method": "manual"},
+    )
+
+    # Enter IP address
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {CONF_HOST: "192.168.1.100"},
     )
 
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "manual"
     assert result["errors"] == {"base": "cannot_connect"}
 
 
@@ -65,13 +83,20 @@ async def test_user_flow_unexpected_exception(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
+    # Select manual entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"setup_method": "manual"},
+    )
+
+    # Enter IP address
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {CONF_HOST: "192.168.1.100"},
     )
 
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "manual"
     assert result["errors"] == {"base": "unknown"}
 
 
@@ -91,6 +116,13 @@ async def test_user_flow_already_configured(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
+    # Select manual entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"setup_method": "manual"},
+    )
+
+    # Enter IP address
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {CONF_HOST: "192.168.1.100"},
@@ -98,6 +130,31 @@ async def test_user_flow_already_configured(
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_user_flow_invalid_host(
+    hass: HomeAssistant, mock_controller: MagicMock
+) -> None:
+    """Test user flow with invalid host."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    # Select manual entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"setup_method": "manual"},
+    )
+
+    # Enter invalid IP (empty string)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: ""},
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "manual"
+    assert result["errors"] == {"base": "invalid_host"}
 
 
 async def test_zeroconf_flow_success(

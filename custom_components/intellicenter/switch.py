@@ -9,53 +9,50 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-from . import OnOffControlMixin, PoolEntity, get_controller
 from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
     CIRCUIT_TYPE,
     HEATER_ATTR,
     HTMODE_ATTR,
+    STATUS_ATTR,
     SUPER_ATTR,
     SYSTEM_TYPE,
     VACFLO_ATTR,
     VOL_ATTR,
-    ModelController,
     PoolObject,
 )
 
-_LOGGER = logging.getLogger(__name__)
+from . import IntelliCenterConfigEntry, OnOffControlMixin, PoolEntity
+from .coordinator import IntelliCenterCoordinator
 
-# -------------------------------------------------------------------------------------
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: IntelliCenterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Load Pentair switch entities based on a config entry."""
-    controller = get_controller(hass, entry)
+    coordinator = entry.runtime_data
 
     switches: list[PoolCircuit] = []
 
     pool_obj: PoolObject
-    for pool_obj in controller.model.objectList:
+    for pool_obj in coordinator.model:
         if pool_obj.objtype == BODY_TYPE:
-            switches.append(PoolBody(entry, controller, pool_obj))
+            switches.append(PoolBody(coordinator, pool_obj))
         elif (
             pool_obj.objtype == CHEM_TYPE
             and pool_obj.subtype == "ICHLOR"
-            and SUPER_ATTR in pool_obj.attributes
+            and SUPER_ATTR in pool_obj.attribute_keys
         ):
             switches.append(
                 PoolCircuit(
-                    entry,
-                    controller,
+                    coordinator,
                     pool_obj,
                     attribute_key=SUPER_ATTR,
                     name="+ Superchlorinate",
@@ -64,23 +61,22 @@ async def async_setup_entry(
             )
         elif (
             pool_obj.objtype == CIRCUIT_TYPE
-            and not (pool_obj.isALight or pool_obj.isALightShow)
-            and pool_obj.isFeatured
+            and not (pool_obj.is_a_light or pool_obj.is_a_light_show)
+            and pool_obj.is_featured
         ):
             switches.append(
-                PoolCircuit(entry, controller, pool_obj, icon="mdi:alpha-f-box-outline")
+                PoolCircuit(coordinator, pool_obj, icon="mdi:alpha-f-box-outline")
             )
         elif pool_obj.objtype == CIRCUIT_TYPE and pool_obj.subtype == "CIRCGRP":
             switches.append(
-                PoolCircuit(entry, controller, pool_obj, icon="mdi:alpha-g-box-outline")
+                PoolCircuit(coordinator, pool_obj, icon="mdi:alpha-g-box-outline")
             )
         elif pool_obj.objtype == SYSTEM_TYPE:
             switches.append(
                 PoolCircuit(
-                    entry,
-                    controller,
+                    coordinator,
                     pool_obj,
-                    VACFLO_ATTR,
+                    attribute_key=VACFLO_ATTR,
                     name="Vacation mode",
                     icon="mdi:palm-tree",
                     enabled_by_default=False,
@@ -90,20 +86,33 @@ async def async_setup_entry(
     async_add_entities(switches)
 
 
-# -------------------------------------------------------------------------------------
-
-
-class PoolCircuit(PoolEntity, OnOffControlMixin, SwitchEntity):  # type: ignore[misc]
+class PoolCircuit(PoolEntity, OnOffControlMixin, SwitchEntity):
     """Representation of a standard pool circuit.
 
     Uses OnOffControlMixin for is_on, async_turn_on, async_turn_off.
-    PoolEntity must come first to provide requestChanges for the mixin.
+    PoolEntity must come first to provide request_changes for the mixin.
     """
 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
-
-# -------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
+        attribute_key: str | None = None,
+        name: str | None = None,
+        icon: str | None = None,
+        enabled_by_default: bool = True,
+    ) -> None:
+        """Initialize a pool circuit switch."""
+        super().__init__(
+            coordinator,
+            pool_object,
+            attribute_key=attribute_key or STATUS_ATTR,
+            name=name,
+            icon=icon,
+            enabled_by_default=enabled_by_default,
+        )
 
 
 class PoolBody(PoolCircuit):
@@ -113,10 +122,9 @@ class PoolBody(PoolCircuit):
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
     ) -> None:
         """Initialize a Pool body from the underlying circuit."""
-        super().__init__(entry, controller, poolObject)
-        self._extra_state_attributes = {VOL_ATTR, HEATER_ATTR, HTMODE_ATTR}
+        super().__init__(coordinator, pool_object)
+        self._extra_state_attrs = {VOL_ATTR, HEATER_ATTR, HTMODE_ATTR}

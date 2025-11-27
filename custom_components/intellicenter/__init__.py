@@ -7,28 +7,25 @@ It supports Zeroconf discovery and local push updates for real-time responsivene
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
-from homeassistant.components.cover import DOMAIN as COVER_DOMAIN
-from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.components.water_heater import DOMAIN as WATER_HEATER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP, UnitOfTemperature
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.const import CONF_HOST, Platform, UnitOfTemperature
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, dispatcher
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import ConfigType
-
-if TYPE_CHECKING:
-    pass
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from pyintellicenter import (
+    STATUS_ATTR,
+    ICModelController,
+    PoolObject,
+)
 
 from .const import (
     CONF_KEEPALIVE_INTERVAL,
@@ -37,134 +34,28 @@ from .const import (
     DEFAULT_RECONNECT_DELAY,
     DOMAIN,
 )
-from pyintellicenter import (
-    ACT_ATTR,
-    BODY_ATTR,
-    BODY_TYPE,
-    CHEM_TYPE,
-    CIRCGRP_TYPE,
-    CIRCUIT_ATTR,
-    CIRCUIT_TYPE,
-    FEATR_ATTR,
-    GPM_ATTR,
-    HEATER_ATTR,
-    HEATER_TYPE,
-    HTMODE_ATTR,
-    LISTORD_ATTR,
-    LOTMP_ATTR,
-    LSTTMP_ATTR,
-    MODE_ATTR,
-    PUMP_TYPE,
-    PWR_ATTR,
-    RPM_ATTR,
-    SCHED_TYPE,
-    SENSE_TYPE,
-    SNAME_ATTR,
-    SOURCE_ATTR,
-    STATUS_ATTR,
-    SUBTYP_ATTR,
-    SYSTEM_TYPE,
-    USE_ATTR,
-    VACFLO_ATTR,
-    VOL_ATTR,
-    BaseController,
-    ConnectionHandler,
-    ModelController,
-    PoolModel,
-    PoolObject,
-)
+from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
-# here is the list of platforms we support
+# Platforms supported by this integration
 PLATFORMS = [
-    LIGHT_DOMAIN,
-    SENSOR_DOMAIN,
-    SWITCH_DOMAIN,
-    BINARY_SENSOR_DOMAIN,
-    WATER_HEATER_DOMAIN,
-    NUMBER_DOMAIN,
-    COVER_DOMAIN,
+    Platform.BINARY_SENSOR,
+    Platform.COVER,
+    Platform.LIGHT,
+    Platform.NUMBER,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.WATER_HEATER,
 ]
 
+type IntelliCenterConfigEntry = ConfigEntry[IntelliCenterCoordinator]
+
+
 # -------------------------------------------------------------------------------------
-
-
-class PoolConnectionHandler(ConnectionHandler):
-    """Connection handler with Home Assistant integration.
-
-    This class bridges the pyintellicenter ConnectionHandler with Home Assistant
-    by sending dispatcher signals when connection state changes or updates arrive.
-    Extracted to module level for better testability.
-    """
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry_id: str,
-        controller: ModelController,
-        timeBetweenReconnects: int = 30,
-    ) -> None:
-        """Initialize the pool connection handler.
-
-        Args:
-            hass: The Home Assistant instance
-            entry_id: The config entry ID for signal namespacing
-            controller: The ModelController to manage
-            timeBetweenReconnects: Initial delay between reconnection attempts
-        """
-        super().__init__(controller, timeBetweenReconnects=timeBetweenReconnects)
-        self._hass = hass
-        self._entry_id = entry_id
-
-    @property
-    def update_signal(self) -> str:
-        """Return the signal name for entity updates."""
-        return f"{DOMAIN}_UPDATE_{self._entry_id}"
-
-    @property
-    def connection_signal(self) -> str:
-        """Return the signal name for connection state changes."""
-        return f"{DOMAIN}_CONNECTION_{self._entry_id}"
-
-    def started(self, controller: BaseController) -> None:
-        """Handle initial connection to the Pentair system."""
-        system_info = controller.systemInfo
-        prop_name = system_info.propName if system_info else "Unknown"
-        _LOGGER.info(f"connected to system: '{prop_name}'")
-
-        # Check for model attribute to access pool objects
-        if hasattr(controller, "model"):
-            for pool_obj in controller.model:
-                _LOGGER.debug(f"   loaded {pool_obj}")
-
-    @callback  # type: ignore[misc]
-    def reconnected(self, controller: BaseController) -> None:
-        """Handle reconnection to the Pentair system."""
-        system_info = controller.systemInfo
-        prop_name = system_info.propName if system_info else "Unknown"
-        _LOGGER.info(f"reconnected to system: '{prop_name}'")
-        dispatcher.async_dispatcher_send(self._hass, self.connection_signal, True)
-
-    @callback  # type: ignore[misc]
-    def disconnected(self, controller: BaseController, exc: Exception | None) -> None:
-        """Handle disconnection from the Pentair system."""
-        system_info = controller.systemInfo
-        prop_name = system_info.propName if system_info else "Unknown"
-        _LOGGER.info(f"disconnected from system: '{prop_name}'")
-        dispatcher.async_dispatcher_send(self._hass, self.connection_signal, False)
-
-    @callback  # type: ignore[misc]
-    def updated(
-        self, controller: ModelController, updates: dict[str, dict[str, Any]]
-    ) -> None:
-        """Handle updates from the Pentair system."""
-        _LOGGER.debug(f"received update for {len(updates)} pool objects")
-        dispatcher.async_dispatcher_send(self._hass, self.update_signal, updates)
-
-
+# Setup Functions
 # -------------------------------------------------------------------------------------
 
 
@@ -173,136 +64,82 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: IntelliCenterConfigEntry
+) -> bool:
     """Set up IntelliCenter integration from a config entry."""
-
     # Get configuration options with defaults
     keepalive_interval = entry.options.get(
         CONF_KEEPALIVE_INTERVAL, DEFAULT_KEEPALIVE_INTERVAL
     )
     reconnect_delay = entry.options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
 
-    attributes_map: dict[str, set[str]] = {
-        BODY_TYPE: {
-            SNAME_ATTR,
-            HEATER_ATTR,
-            HTMODE_ATTR,
-            LOTMP_ATTR,
-            LSTTMP_ATTR,
-            STATUS_ATTR,
-            VOL_ATTR,
-        },
-        CIRCUIT_TYPE: {SNAME_ATTR, STATUS_ATTR, USE_ATTR, SUBTYP_ATTR, FEATR_ATTR},
-        CIRCGRP_TYPE: {CIRCUIT_ATTR},
-        CHEM_TYPE: set(),
-        HEATER_TYPE: {SNAME_ATTR, BODY_ATTR, LISTORD_ATTR},
-        PUMP_TYPE: {SNAME_ATTR, STATUS_ATTR, PWR_ATTR, RPM_ATTR, GPM_ATTR},
-        SENSE_TYPE: {SNAME_ATTR, SOURCE_ATTR},
-        SCHED_TYPE: {SNAME_ATTR, ACT_ATTR, VACFLO_ATTR},
-        SYSTEM_TYPE: {MODE_ATTR, VACFLO_ATTR},
-    }
-    model = PoolModel(attributes_map)
-
-    controller = ModelController(
-        entry.data[CONF_HOST],
-        model,
-        loop=hass.loop,
+    # Create the coordinator
+    coordinator = IntelliCenterCoordinator(
+        hass,
+        entry,
+        host=entry.data[CONF_HOST],
         keepalive_interval=keepalive_interval,
+        reconnect_delay=reconnect_delay,
     )
 
     try:
-        handler = PoolConnectionHandler(
-            hass, entry.entry_id, controller, timeBetweenReconnects=reconnect_delay
-        )
+        # Start the connection
+        await coordinator.async_start()
 
-        await handler.start()
+        # Store the coordinator in the entry's runtime_data
+        entry.runtime_data = coordinator
 
-        # Set up platforms BEFORE returning from setup_entry
-        # This ensures entities are available immediately after setup completes
+        # Set up platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-        hass.data.setdefault(DOMAIN, {})
-
-        # Store handler and event listener callback for cleanup
-        async def on_hass_stop(event: Any) -> None:
-            """Stop push updates when hass stops."""
-            handler.stop()
-
-        stop_listener = hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STOP, on_hass_stop
-        )
-
-        hass.data[DOMAIN][entry.entry_id] = {
-            "handler": handler,
-            "stop_listener": stop_listener,
-        }
 
         # Register update listener for options changes
         entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
         return True
+
     except ConnectionRefusedError as err:
         raise ConfigEntryNotReady from err
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: IntelliCenterConfigEntry
+) -> bool:
     """Unload IntelliCenter config entry."""
-    # Use the proper Home Assistant method for unloading platforms
+    # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # Cleanup handler and event listener
-    entry_data = hass.data[DOMAIN].pop(entry.entry_id, None)
+    # Stop the coordinator
+    if entry.runtime_data:
+        await entry.runtime_data.async_stop()
 
-    _LOGGER.info(f"unloading integration {entry.entry_id}")
-    if entry_data:
-        # Cancel the stop listener to prevent memory leaks
-        stop_listener = entry_data.get("stop_listener")
-        if stop_listener:
-            stop_listener()
-
-        # Stop the connection handler
-        handler = entry_data.get("handler")
-        if handler:
-            handler.stop()
-
-    # If it was the last instance of this integration, clear up the DOMAIN entry
-    if not hass.data[DOMAIN]:
-        del hass.data[DOMAIN]
+    _LOGGER.info("Unloaded IntelliCenter integration: %s", entry.entry_id)
 
     return bool(unload_ok)
 
 
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_reload_entry(
+    hass: HomeAssistant, entry: IntelliCenterConfigEntry
+) -> None:
     """Reload the config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate old entry data to current version.
-
-    Args:
-        hass: The Home Assistant instance.
-        entry: The config entry to migrate.
-
-    Returns:
-        True if migration was successful.
-    """
-    _LOGGER.debug(f"Migrating from version {entry.version}.{entry.minor_version}")
-
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: IntelliCenterConfigEntry
+) -> bool:
+    """Migrate old entry data to current version."""
+    _LOGGER.debug("Migrating from version %s.%s", entry.version, entry.minor_version)
     # Currently at version 1.1, no migration needed yet
-    # Future migrations should follow this pattern:
-    # if entry.version == 1:
-    #     # Migrate from version 1 to version 2
-    #     new_data = {**entry.data, "new_key": "default_value"}
-    #     hass.config_entries.async_update_entry(entry, data=new_data, version=2)
-
     return True
 
 
 # -------------------------------------------------------------------------------------
+# Base Entity Class
+# -------------------------------------------------------------------------------------
 
 
-class PoolEntity(Entity):  # type: ignore[misc]
+class PoolEntity(CoordinatorEntity[IntelliCenterCoordinator], Entity):
     """Base representation of a Pool entity linked to a pool object.
 
     This class provides common functionality for all pool-related entities
@@ -314,82 +151,113 @@ class PoolEntity(Entity):  # type: ignore[misc]
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
         attribute_key: str = STATUS_ATTR,
         name: str | None = None,
         enabled_by_default: bool = True,
-        extraStateAttributes: Iterable[str] | None = None,
+        extra_state_attributes: Iterable[str] | None = None,
         icon: str | None = None,
         unit_of_measurement: str | None = None,
     ) -> None:
         """Initialize a Pool entity.
 
         Args:
-            entry: The config entry for this integration
-            controller: The ModelController managing the connection
-            poolObject: The PoolObject this entity represents
+            coordinator: The coordinator for this integration
+            pool_object: The PoolObject this entity represents
             attribute_key: The primary attribute to monitor (default: STATUS_ATTR)
             name: Custom name or suffix (prefixed with '+') for the entity
             enabled_by_default: Whether the entity is enabled by default
-            extraStateAttributes: Additional attributes to include in state
+            extra_state_attributes: Additional attributes to include in state
             icon: Custom icon for the entity
             unit_of_measurement: Unit of measurement for sensors
         """
-        self._entry_id = entry.entry_id
-        self._controller = controller
-        self._poolObject = poolObject
-        self._attr_available = True
-        self._extra_state_attributes: set[str] = (
-            set(extraStateAttributes) if extraStateAttributes else set()
-        )
-        self._custom_name = name
+        super().__init__(coordinator)
+
+        self._pool_object = pool_object
         self._attribute_key = attribute_key
+        self._custom_name = name
+        self._extra_state_attrs: set[str] = (
+            set(extra_state_attributes) if extra_state_attributes else set()
+        )
+
         self._attr_entity_registry_enabled_default = enabled_by_default
         self._attr_native_unit_of_measurement = unit_of_measurement
         if icon:
             self._attr_icon = icon
 
-        _LOGGER.debug(f"mapping {poolObject}")
+        _LOGGER.debug("Mapping %s", pool_object)
 
-    async def async_added_to_hass(self) -> None:
-        """Entity is added to Home Assistant."""
-        self.async_on_remove(
-            dispatcher.async_dispatcher_connect(
-                self.hass, DOMAIN + "_UPDATE_" + self._entry_id, self._update_callback
-            )
-        )
+    @property
+    def _entry_id(self) -> str:
+        """Return the config entry ID."""
+        return str(self.coordinator.config_entry.entry_id)
 
-        self.async_on_remove(
-            dispatcher.async_dispatcher_connect(
-                self.hass,
-                DOMAIN + "_CONNECTION_" + self._entry_id,
-                self._connection_callback,
-            )
-        )
+    @property
+    def _controller(self) -> ICModelController:
+        """Return the controller."""
+        return self.coordinator.controller
 
-    async def async_will_remove_from_hass(self) -> None:
-        """Entity is removed from Home Assistant."""
-        _LOGGER.debug(f"removing entity: {self.unique_id}")
+    @property
+    def _poolObject(self) -> PoolObject:
+        """Return the pool object (backwards compatibility)."""
+        return self._pool_object
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return bool(self.coordinator.connected)
 
     @property
     def name(self) -> str | None:
-        """Return the name of the entity."""
+        """Return the name of the entity.
+
+        Strips trailing " 1" from the name when it's the only instance
+        of that device type (e.g., "IntelliChem 1" becomes "IntelliChem").
+        """
+        sname: str | None = self._pool_object.sname
+        if sname:
+            sname = self._simplify_name(sname)
+
         if self._custom_name is None:
-            # Default is to return the name of the underlying pool object
-            return self._poolObject.sname
+            return sname
         elif self._custom_name.startswith("+"):
-            # Name is a suffix
-            base_name = self._poolObject.sname or ""
+            base_name = sname or ""
             return base_name + self._custom_name[1:]
-        else:
-            return self._custom_name
+        return self._custom_name
+
+    def _simplify_name(self, name: str) -> str:
+        """Remove trailing number when it's the only instance of this type.
+
+        IntelliCenter names devices like "IntelliChem 1" even when there's
+        only one. This method strips the trailing " 1" in such cases.
+        """
+        # Check if name ends with " 1"
+        match = re.match(r"^(.+) 1$", name)
+        if not match:
+            return name
+
+        base_name = match.group(1)
+        obj_type = self._pool_object.objtype
+        obj_subtype = self._pool_object.subtype
+
+        # Count how many objects of the same type/subtype exist
+        count = sum(
+            1
+            for obj in self.coordinator.model
+            if obj.objtype == obj_type and obj.subtype == obj_subtype
+        )
+
+        # Only strip " 1" if there's exactly one instance
+        if count == 1:
+            return base_name
+
+        return name
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        my_id: str = self._entry_id + "_" + self._poolObject.objnam
+        my_id = f"{self._entry_id}_{self._pool_object.objnam}"
         if self._attribute_key != STATUS_ATTR:
             my_id = my_id + self._attribute_key
         return my_id
@@ -397,20 +265,20 @@ class PoolEntity(Entity):  # type: ignore[misc]
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        system_info = self._controller.systemInfo
+        system_info = self.coordinator.system_info
 
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
             manufacturer="Pentair",
             model="IntelliCenter",
-            name=system_info.propName if system_info else "IntelliCenter",
-            sw_version=system_info.swVersion if system_info else None,
+            name=system_info.prop_name if system_info else "IntelliCenter",
+            sw_version=system_info.sw_version if system_info else None,
         )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes of the entity."""
-        pool_obj = self._poolObject
+        pool_obj = self._pool_object
 
         obj_type = pool_obj.objtype
         if pool_obj.subtype:
@@ -424,111 +292,85 @@ class PoolEntity(Entity):  # type: ignore[misc]
         if pool_obj.status:
             attributes["Status"] = pool_obj.status
 
-        for attribute in self._extra_state_attributes:
+        for attribute in self._extra_state_attrs:
             value = pool_obj[attribute]
             if value is not None:
                 attributes[attribute] = value
 
         return attributes
 
-    def requestChanges(self, changes: dict[str, Any]) -> None:
-        """Request changes as key:value pairs to the associated Pool object.
+    def request_changes(self, changes: dict[str, Any]) -> None:
+        """Request changes to the associated Pool object.
 
         Args:
             changes: Dictionary of attribute changes to apply
+
+        Note:
+            This method fires and forgets the request. Changes will be
+            reflected as an update notification if successful.
         """
-        # Since we don't care about waiting for the response, set waitForResponse to False
-        # Whatever changes were requested will be reflected as an update if successful
-        self._controller.requestChanges(
-            self._poolObject.objnam, changes, waitForResponse=False
+        self.hass.async_create_task(
+            self._async_request_changes(changes),
+            f"intellicenter_request_changes_{self._pool_object.objnam}",
         )
+
+    async def _async_request_changes(self, changes: dict[str, Any]) -> None:
+        """Async helper to request changes with error handling."""
+        try:
+            await self._controller.request_changes(self._pool_object.objnam, changes)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to request changes for %s: %s",
+                self._pool_object.objnam,
+                changes,
+            )
+
+    # Backwards compatibility alias
+    def requestChanges(self, changes: dict[str, Any]) -> None:
+        """Request changes (backwards compatibility alias)."""
+        self.request_changes(changes)
 
     def _check_attributes_updated(
         self, updates: dict[str, dict[str, Any]], *attributes: str
     ) -> bool:
-        """Check if any of the specified attributes were updated.
-
-        Helper method to simplify isUpdated() implementations in subclasses.
-        Instead of repeating the set intersection pattern, subclasses can call
-        this method with the attributes they care about.
-
-        Args:
-            updates: Dictionary of object updates from IntelliCenter
-            *attributes: Variable number of attribute names to check
-
-        Returns:
-            True if any of the specified attributes were updated for this object
-
-        Example:
-            def isUpdated(self, updates):
-                return self._check_attributes_updated(
-                    updates, STATUS_ATTR, HEATER_ATTR, HTMODE_ATTR
-                )
-        """
-        my_updates = updates.get(self._poolObject.objnam, {})
+        """Check if any of the specified attributes were updated."""
+        my_updates = updates.get(self._pool_object.objnam, {})
         if not my_updates:
             return False
         return bool(set(attributes) & my_updates.keys())
 
     def isUpdated(self, updates: dict[str, dict[str, Any]]) -> bool:
-        """Return true if the entity is updated by the updates from IntelliCenter.
+        """Return true if the entity is updated by the updates from IntelliCenter."""
+        return self._attribute_key in updates.get(self._pool_object.objnam, {})
 
-        Args:
-            updates: Dictionary of object updates
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        updates = self.coordinator.data or {}
 
-        Returns:
-            True if this entity's primary attribute was updated
-
-        Note:
-            Subclasses that need to track multiple attributes should override
-            this method and use _check_attributes_updated() helper.
-        """
-        return self._attribute_key in updates.get(self._poolObject.objnam, {})
-
-    @callback  # type: ignore[misc]
-    def _update_callback(self, updates: dict[str, dict[str, Any]]) -> None:
-        """Update the entity if its underlying pool object has changed."""
-        if self.isUpdated(updates):
-            self._attr_available = True
-            _LOGGER.debug(f"updating {self} from {updates}")
+        # Check if this entity needs to update
+        if updates and self.isUpdated(updates):
+            # Update the pool object reference if it changed
+            updated_obj = self.coordinator.model[self._pool_object.objnam]
+            if updated_obj:
+                self._pool_object = updated_obj
+            # Clear optimistic state if this entity uses OnOffControlMixin
+            if hasattr(self, "_clear_optimistic_state"):
+                self._clear_optimistic_state()
+            self.async_write_ha_state()
+        elif not updates:
+            # Connection state change - update availability
             self.async_write_ha_state()
 
-    @callback  # type: ignore[misc]
-    def _connection_callback(self, is_connected: bool) -> None:
-        """Mark the entity as unavailable after being disconnected from the server."""
-        if is_connected:
-            updated_obj = self._controller.model[self._poolObject.objnam]
-            if not updated_obj:
-                # This is for the rare case where the object the entity is mapped to
-                # had been removed from the Pentair system while we were disconnected
-                return
-            self._poolObject = updated_obj
-        self._attr_available = is_connected
-        self.async_write_ha_state()
-
     def pentairTemperatureSettings(self) -> str:
-        """Return the temperature units from the Pentair system.
-
-        Returns:
-            UnitOfTemperature.CELSIUS or UnitOfTemperature.FAHRENHEIT
-        """
-        system_info = self._controller.systemInfo
-        if system_info and system_info.usesMetric:
+        """Return the temperature units from the Pentair system."""
+        system_info = self.coordinator.system_info
+        if system_info and system_info.uses_metric:
             return str(UnitOfTemperature.CELSIUS)
         return str(UnitOfTemperature.FAHRENHEIT)
 
     def _safe_float_conversion(self, value: Any) -> float | None:
-        """Safely convert a value to float.
-
-        Helper method to convert attribute values to float with proper
-        error handling. Used for temperature and other numeric values.
-
-        Args:
-            value: The value to convert (can be None, string, or numeric).
-
-        Returns:
-            The value as float, or None if conversion fails.
-        """
+        """Safely convert a value to float."""
         if value is None:
             return None
         try:
@@ -537,54 +379,13 @@ class PoolEntity(Entity):  # type: ignore[misc]
             return None
 
     def _safe_int_conversion(self, value: Any) -> int | None:
-        """Safely convert a value to int.
-
-        Helper method to convert attribute values to int with proper
-        error handling. Used for RPM, power, and other integer values.
-
-        Args:
-            value: The value to convert (can be None, string, or numeric).
-
-        Returns:
-            The value as int, or None if conversion fails.
-        """
+        """Safely convert a value to int."""
         if value is None:
             return None
         try:
             return int(value)
         except (ValueError, TypeError):
             return None
-
-
-# -------------------------------------------------------------------------------------
-# Platform Setup Helper
-# -------------------------------------------------------------------------------------
-
-
-def get_controller(hass: HomeAssistant, entry: ConfigEntry) -> ModelController:
-    """Get the ModelController for a config entry.
-
-    This helper reduces boilerplate in platform async_setup_entry functions.
-
-    Args:
-        hass: The Home Assistant instance
-        entry: The config entry
-
-    Returns:
-        The ModelController for this entry
-
-    Example:
-        async def async_setup_entry(hass, entry, async_add_entities):
-            controller = get_controller(hass, entry)
-            entities = []
-            for obj in controller.model.objectList:
-                if obj.isALight:
-                    entities.append(PoolLight(entry, controller, obj))
-            async_add_entities(entities)
-    """
-    handler = hass.data[DOMAIN][entry.entry_id]["handler"]
-    controller: ModelController = handler.controller
-    return controller
 
 
 # -------------------------------------------------------------------------------------
@@ -595,40 +396,53 @@ def get_controller(hass: HomeAssistant, entry: ConfigEntry) -> ModelController:
 class OnOffControlMixin:
     """Mixin for entities with simple on/off control.
 
-    This mixin provides common turn_on/turn_off functionality for entities
-    that use STATUS_ATTR with standard on/off status values.
-
-    Classes using this mixin must also inherit from PoolEntity (which provides
-    requestChanges). The mixin should be listed AFTER PoolEntity in the class
-    inheritance to ensure proper method resolution order.
-
-    Example:
-        class PoolCircuit(PoolEntity, OnOffControlMixin, SwitchEntity):
-            # is_on, async_turn_on, async_turn_off provided by mixin
-            pass
+    Classes using this mixin must also inherit from PoolEntity.
+    Implements optimistic updates for immediate UI feedback.
     """
 
-    # Type hints for attributes provided by PoolEntity
-    _poolObject: PoolObject
+    _pool_object: PoolObject
     _attribute_key: str
+    _optimistic_state: bool | None = None  # None = use real state
 
-    # Note: requestChanges is provided by PoolEntity, not defined here
-    # to avoid MRO issues. This is just a type hint for IDE support.
     if TYPE_CHECKING:
+        hass: HomeAssistant
 
-        def requestChanges(self, changes: dict[str, Any]) -> None:
+        def request_changes(self, changes: dict[str, Any]) -> None:
             """Request changes - provided by PoolEntity."""
+            ...
+
+        def async_write_ha_state(self) -> None:
+            """Write entity state to Home Assistant - provided by Entity."""
+            ...
+
+        def isUpdated(self, updates: dict[str, dict[str, Any]]) -> bool:
+            """Check if entity was updated - provided by PoolEntity."""
             ...
 
     @property
     def is_on(self) -> bool:
         """Return true if the entity is on."""
-        return bool(self._poolObject[self._attribute_key] == self._poolObject.onStatus)
+        # Use optimistic state if set, otherwise use real state
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+        return bool(
+            self._pool_object[self._attribute_key] == self._pool_object.on_status
+        )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
-        self.requestChanges({self._attribute_key: self._poolObject.onStatus})
+        # Optimistic update for immediate UI feedback
+        self._optimistic_state = True
+        self.async_write_ha_state()
+        self.request_changes({self._attribute_key: self._pool_object.on_status})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
-        self.requestChanges({self._attribute_key: self._poolObject.offStatus})
+        # Optimistic update for immediate UI feedback
+        self._optimistic_state = False
+        self.async_write_ha_state()
+        self.request_changes({self._attribute_key: self._pool_object.off_status})
+
+    def _clear_optimistic_state(self) -> None:
+        """Clear optimistic state when real update is received."""
+        self._optimistic_state = None

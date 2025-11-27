@@ -1,19 +1,16 @@
 """Test the Pentair IntelliCenter switch platform."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-import pytest
-
-from custom_components.intellicenter import DOMAIN
 from pyintellicenter import (
     STATUS_ATTR,
     VACFLO_ATTR,
     PoolModel,
     PoolObject,
 )
+import pytest
+
 from custom_components.intellicenter.switch import PoolBody, PoolCircuit
 
 pytestmark = pytest.mark.asyncio
@@ -22,18 +19,16 @@ pytestmark = pytest.mark.asyncio
 async def test_switch_setup_creates_entities(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test switch platform creates entities for circuits and bodies."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model
 
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -42,7 +37,7 @@ async def test_switch_setup_creates_entities(
 
     from custom_components.intellicenter.switch import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create switches for:
     # - POOL1 (Pool body)
@@ -63,15 +58,10 @@ async def test_switch_setup_creates_entities(
 async def test_circuit_switch_properties(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolCircuit switch properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    switch = PoolCircuit(entry, mock_controller, pool_object_switch)
+    switch = PoolCircuit(mock_coordinator, pool_object_switch)
 
     assert switch.is_on is False
     assert switch.name == "Pool Cleaner"
@@ -81,21 +71,17 @@ async def test_circuit_switch_properties(
 async def test_circuit_switch_turn_on(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on a circuit switch."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    switch = PoolCircuit(entry, mock_controller, pool_object_switch)
+    switch = PoolCircuit(mock_coordinator, pool_object_switch)
+    switch.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await switch.async_turn_on()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "CIRC01"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
@@ -104,26 +90,22 @@ async def test_circuit_switch_turn_on(
 async def test_circuit_switch_turn_off(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning off a circuit switch."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
     # Set switch to ON initially
     pool_object_switch.update({STATUS_ATTR: "ON"})
 
-    switch = PoolCircuit(entry, mock_controller, pool_object_switch)
+    switch = PoolCircuit(mock_coordinator, pool_object_switch)
+    switch.hass = hass  # Required for async_create_task
 
     assert switch.is_on is True
 
     await hass.async_block_till_done()
     await switch.async_turn_off()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "CIRC01"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "OFF"
@@ -132,14 +114,10 @@ async def test_circuit_switch_turn_off(
 async def test_body_switch_properties(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolBody switch properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    body_switch = PoolBody(entry, mock_controller, pool_object_body)
+    body_switch = PoolBody(mock_coordinator, pool_object_body)
 
     assert body_switch.is_on is True  # STATUS is "ON" in fixture
     assert body_switch.name == "Pool"
@@ -149,24 +127,20 @@ async def test_body_switch_properties(
 async def test_body_switch_turn_on(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on a body switch."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
     # Set body to OFF initially
     pool_object_body.update({STATUS_ATTR: "OFF"})
 
-    body_switch = PoolBody(entry, mock_controller, pool_object_body)
+    body_switch = PoolBody(mock_coordinator, pool_object_body)
+    body_switch.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await body_switch.async_turn_on()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
@@ -175,21 +149,17 @@ async def test_body_switch_turn_on(
 async def test_body_switch_turn_off(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning off a body switch."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-
-    body_switch = PoolBody(entry, mock_controller, pool_object_body)
+    body_switch = PoolBody(mock_coordinator, pool_object_body)
+    body_switch.hass = hass  # Required for async_create_task
 
     await hass.async_block_till_done()
     await body_switch.async_turn_off()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "OFF"
@@ -198,19 +168,14 @@ async def test_body_switch_turn_off(
 async def test_vacation_mode_switch(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test vacation mode switch creation and properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
     system_obj = pool_model["SYS01"]
     system_obj.update({VACFLO_ATTR: "OFF"})
 
     vacation_switch = PoolCircuit(
-        entry,
-        mock_controller,
+        mock_coordinator,
         system_obj,
         VACFLO_ATTR,
         name="Vacation mode",
@@ -226,14 +191,10 @@ async def test_vacation_mode_switch(
 async def test_switch_state_updates(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test switch state updates from IntelliCenter."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    switch = PoolCircuit(entry, mock_controller, pool_object_switch)
+    switch = PoolCircuit(mock_coordinator, pool_object_switch)
 
     # Simulate update from IntelliCenter
     updates = {
@@ -254,17 +215,16 @@ async def test_switch_state_updates(
 async def test_non_featured_circuit_not_created(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that non-featured circuits don't create switches."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model
 
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -273,13 +233,13 @@ async def test_non_featured_circuit_not_created(
 
     from custom_components.intellicenter.switch import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # CIRC02 is not featured, should not be in switches
     circ02_switches = [
         e
         for e in entities_added
-        if hasattr(e, "_poolObject") and e._poolObject.objnam == "CIRC02"
+        if hasattr(e, "_pool_object") and e._pool_object.objnam == "CIRC02"
     ]
     assert len(circ02_switches) == 0
 
@@ -287,15 +247,11 @@ async def test_non_featured_circuit_not_created(
 async def test_switch_device_class(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test that switches have the correct device class."""
     from homeassistant.components.switch import SwitchDeviceClass
 
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-
-    circuit = PoolCircuit(entry, mock_controller, pool_object_switch)
+    circuit = PoolCircuit(mock_coordinator, pool_object_switch)
 
     assert circuit.device_class == SwitchDeviceClass.SWITCH

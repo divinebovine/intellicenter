@@ -1,14 +1,9 @@
 """Test the Pentair IntelliCenter number platform."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, PERCENTAGE
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
-import pytest
-
-from custom_components.intellicenter import DOMAIN
-from custom_components.intellicenter.number import PoolNumber
 from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
@@ -17,6 +12,9 @@ from pyintellicenter import (
     PoolModel,
     PoolObject,
 )
+import pytest
+
+from custom_components.intellicenter.number import PoolNumber
 
 pytestmark = pytest.mark.asyncio
 
@@ -25,7 +23,7 @@ pytestmark = pytest.mark.asyncio
 def pool_model_with_intellichlor() -> PoolModel:
     """Return a PoolModel with IntelliChlor."""
     model = PoolModel()
-    model.addObjects(
+    model.add_objects(
         [
             {
                 "objnam": "POOL1",
@@ -78,18 +76,16 @@ def pool_object_intellichlor() -> PoolObject:
 async def test_number_setup_creates_entities(
     hass: HomeAssistant,
     pool_model_with_intellichlor: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number platform creates entities for IntelliChlor."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model_with_intellichlor
 
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model_with_intellichlor
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -98,7 +94,7 @@ async def test_number_setup_creates_entities(
 
     from custom_components.intellicenter.number import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create 2 number entities (one for each body)
     assert len(entities_added) == 2
@@ -107,16 +103,12 @@ async def test_number_setup_creates_entities(
 async def test_number_entity_properties_primary(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolNumber entity properties for primary output."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         unit_of_measurement=PERCENTAGE,
         attribute_key=PRIM_ATTR,
@@ -131,16 +123,12 @@ async def test_number_entity_properties_primary(
 async def test_number_entity_properties_secondary(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolNumber entity properties for secondary output."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         unit_of_measurement=PERCENTAGE,
         attribute_key=SEC_ATTR,
@@ -153,17 +141,13 @@ async def test_number_entity_properties_secondary(
 async def test_number_min_max_step(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number min/max/step values."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     # Use default values
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
@@ -177,16 +161,12 @@ async def test_number_min_max_step(
 async def test_number_custom_min_max_step(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number with custom min/max/step values."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         min_value=10,
         max_value=90,
@@ -202,25 +182,23 @@ async def test_number_custom_min_max_step(
 async def test_number_set_value(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting number value."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
+    mock_coordinator.controller.request_changes = AsyncMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
+    number.hass = hass  # Required for async_create_task
 
     await number.async_set_native_value(75)
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "ICHLOR1"
     assert PRIM_ATTR in args[1]
     assert args[1][PRIM_ATTR] == "75"
@@ -229,25 +207,23 @@ async def test_number_set_value(
 async def test_number_set_value_secondary(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting secondary number value."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
+    mock_coordinator.controller.request_changes = AsyncMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=SEC_ATTR,
     )
+    number.hass = hass  # Required for async_create_task
 
     await number.async_set_native_value(40)
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "ICHLOR1"
     assert SEC_ATTR in args[1]
     assert args[1][SEC_ATTR] == "40"
@@ -256,25 +232,23 @@ async def test_number_set_value_secondary(
 async def test_number_set_value_converts_to_int(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting number value converts float to int."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
+    mock_coordinator.controller.request_changes = AsyncMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
+    number.hass = hass  # Required for async_create_task
 
     await number.async_set_native_value(75.5)
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     # Should convert 75.5 to "75"
     assert args[1][PRIM_ATTR] == "75"
 
@@ -282,16 +256,12 @@ async def test_number_set_value_converts_to_int(
 async def test_number_unique_id(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number unique ID generation."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
@@ -302,12 +272,9 @@ async def test_number_unique_id(
 
 async def test_number_native_value_none(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number native_value when attribute is None."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     obj = PoolObject(
         "ICHLOR1",
@@ -320,8 +287,7 @@ async def test_number_native_value_none(
     )
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         obj,
         attribute_key=PRIM_ATTR,
     )
@@ -331,12 +297,9 @@ async def test_number_native_value_none(
 
 async def test_number_native_value_invalid(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number native_value when attribute is invalid."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     obj = PoolObject(
         "ICHLOR1",
@@ -349,8 +312,7 @@ async def test_number_native_value_invalid(
     )
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         obj,
         attribute_key=PRIM_ATTR,
     )
@@ -361,16 +323,12 @@ async def test_number_native_value_invalid(
 async def test_number_is_updated(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number isUpdated method."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
@@ -388,16 +346,12 @@ async def test_number_is_updated(
 async def test_number_state_updates(
     hass: HomeAssistant,
     pool_object_intellichlor: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number state updates from IntelliCenter."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
 
     number = PoolNumber(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_intellichlor,
         attribute_key=PRIM_ATTR,
     )
@@ -418,10 +372,11 @@ async def test_number_state_updates(
 
 async def test_number_no_bodies_configured(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test number setup when no bodies are configured."""
     model = PoolModel()
-    model.addObjects(
+    model.add_objects(
         [
             {
                 "objnam": "ICHLOR1",
@@ -435,17 +390,13 @@ async def test_number_no_bodies_configured(
             },
         ]
     )
+    # Set up the mock coordinator's model
+    mock_coordinator.model = model
 
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
-
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -454,7 +405,7 @@ async def test_number_no_bodies_configured(
 
     from custom_components.intellicenter.number import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create no entities when no bodies configured
     assert len(entities_added) == 0

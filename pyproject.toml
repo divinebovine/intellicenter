@@ -1,12 +1,15 @@
 [project]
 name = "intellicenter"
-version = "2.0.0"
+version = "3.5.0"
 description = "Home Assistant custom integration for Pentair IntelliCenter"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13.2"
+dependencies = [
+    "homeassistant>=2025.11.3",
+]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]
@@ -51,7 +54,7 @@ skip = ".git,*.json,*.csv"
 quiet-level = 2
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 ignore_missing_imports = true
 no_strict_optional = true
 warn_redundant_casts = true
@@ -76,7 +79,10 @@ norecursedirs = [
 
 [dependency-groups]
 dev = [
-    "homeassistant>=2024.3.3",
+    "homeassistant>=2025.11.0",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-homeassistant-custom-component>=0.13.297",
 ]
 
 # Note: pyintellicenter is installed from local path during development:

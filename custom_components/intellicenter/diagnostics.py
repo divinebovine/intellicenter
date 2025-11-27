@@ -9,12 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
-from pyintellicenter import ModelController
+from . import IntelliCenterConfigEntry
 
 # Keys to redact from diagnostics output for privacy
 TO_REDACT = {
@@ -29,7 +27,7 @@ TO_REDACT = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: IntelliCenterConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry.
 
@@ -46,22 +44,18 @@ async def async_get_config_entry_diagnostics(
             "entry_id": entry.entry_id,
             "title": entry.title,
             "data": dict(entry.data),
+            "options": dict(entry.options),
         },
     }
 
     try:
-        # Try to get handler and controller
-        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-        if entry_data is None:
-            diagnostics_data["error"] = "Integration data not found"
+        # Get coordinator from runtime_data
+        coordinator = entry.runtime_data
+        if coordinator is None:
+            diagnostics_data["error"] = "Coordinator not found"
             return dict(async_redact_data(diagnostics_data, TO_REDACT))
 
-        handler = entry_data.get("handler")
-        if handler is None:
-            diagnostics_data["error"] = "Handler not found"
-            return dict(async_redact_data(diagnostics_data, TO_REDACT))
-
-        controller: ModelController = handler.controller
+        controller = coordinator.controller
 
         # Collect pool object information
         objects = [
@@ -71,28 +65,34 @@ async def async_get_config_entry_diagnostics(
                 "subtype": obj.subtype,
                 "properties": obj.properties,
             }
-            for obj in controller.model.objectList
+            for obj in coordinator.model
         ]
 
         # Include system info if available
         system_info: dict[str, Any] = {}
-        if controller.systemInfo:
+        if coordinator.system_info:
             system_info = {
-                "sw_version": controller.systemInfo.swVersion,
-                "uses_metric": controller.systemInfo.usesMetric,
+                "sw_version": coordinator.system_info.sw_version,
+                "uses_metric": coordinator.system_info.uses_metric,
             }
 
-        # Include connection metrics for observability
-        connection_metrics = controller.metrics.to_dict()
+        # Include connection state
+        connection_state: dict[str, Any] = {
+            "connected": coordinator.connected,
+        }
+
+        # Include connection metrics for observability if available
+        if hasattr(controller, "metrics") and controller.metrics:
+            connection_state["metrics"] = controller.metrics.to_dict()
 
         # Count objects by type for summary
         object_types: dict[str, int] = {}
-        for obj in controller.model.objectList:
+        for obj in coordinator.model:
             obj_type = obj.objtype
             object_types[obj_type] = object_types.get(obj_type, 0) + 1
 
         diagnostics_data["system_info"] = system_info
-        diagnostics_data["connection_metrics"] = connection_metrics
+        diagnostics_data["connection_state"] = connection_state
         diagnostics_data["object_count"] = len(objects)
         diagnostics_data["object_types"] = object_types
         diagnostics_data["objects"] = objects

@@ -13,18 +13,19 @@ from homeassistant.components.cover import (
     CoverEntity,
     CoverEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-from . import PoolEntity, get_controller
 from pyintellicenter import (
     EXTINSTR_TYPE,
     NORMAL_ATTR,
     STATUS_ATTR,
-    ModelController,
+    STATUS_OFF,
+    STATUS_ON,
     PoolObject,
 )
+
+from . import IntelliCenterConfigEntry, PoolEntity
+from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,18 +34,18 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: IntelliCenterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Load pool cover entities based on a config entry."""
-    controller = get_controller(hass, entry)
+    coordinator = entry.runtime_data
 
     covers: list[PoolCover] = []
 
     pool_obj: PoolObject
-    for pool_obj in controller.model.objectList:
+    for pool_obj in coordinator.model:
         if pool_obj.objtype == EXTINSTR_TYPE and pool_obj.subtype == "COVER":
-            covers.append(PoolCover(entry, controller, pool_obj))
+            covers.append(PoolCover(coordinator, pool_obj))
 
     async_add_entities(covers)
 
@@ -52,29 +53,26 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolCover(PoolEntity, CoverEntity):  # type: ignore[misc]
+class PoolCover(PoolEntity, CoverEntity):
     """Representation of a Pentair pool cover."""
 
     _attr_device_class = CoverDeviceClass.SHADE
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
     ) -> None:
         """Initialize a pool cover entity.
 
         Args:
-            entry: The config entry for this integration
-            controller: The ModelController managing the connection
-            poolObject: The PoolObject this cover represents
+            coordinator: The coordinator for this integration
+            pool_object: The PoolObject this cover represents
         """
         super().__init__(
-            entry,
-            controller,
-            poolObject,
-            extraStateAttributes=[NORMAL_ATTR],
+            coordinator,
+            pool_object,
+            extra_state_attributes=[NORMAL_ATTR],
             icon="mdi:arrow-expand-horizontal",
         )
         self._attr_supported_features = (
@@ -87,23 +85,22 @@ class PoolCover(PoolEntity, CoverEntity):  # type: ignore[misc]
         # The cover is closed if:
         # - STATUS is ON and NORMAL is ON (cover is normally closed)
         # - STATUS is OFF and NORMAL is OFF (cover is normally open)
-        status = self._poolObject[STATUS_ATTR] == "ON"
-        normal = self._poolObject[NORMAL_ATTR] == "ON"
+        status = self._pool_object[STATUS_ATTR] == STATUS_ON
+        normal = self._pool_object[NORMAL_ATTR] == STATUS_ON
         return bool(status == normal)
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
         # To open the cover, we need to set STATUS opposite of NORMAL
-        normal = self._poolObject[NORMAL_ATTR] == "ON"
-        self.requestChanges({STATUS_ATTR: "OFF" if normal else "ON"})
+        normal = self._pool_object[NORMAL_ATTR] == STATUS_ON
+        self.request_changes({STATUS_ATTR: STATUS_OFF if normal else STATUS_ON})
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
         # To close the cover, we need to set STATUS same as NORMAL
-        normal = self._poolObject[NORMAL_ATTR] == "ON"
-        self.requestChanges({STATUS_ATTR: "ON" if normal else "OFF"})
+        normal = self._pool_object[NORMAL_ATTR] == STATUS_ON
+        self.request_changes({STATUS_ATTR: STATUS_ON if normal else STATUS_OFF})
 
     def isUpdated(self, updates: dict[str, dict[str, str]]) -> bool:
         """Return true if the entity is updated by the updates from Intellicenter."""
-        myUpdates = updates.get(self._poolObject.objnam, {})
-        return bool(myUpdates and ({STATUS_ATTR, NORMAL_ATTR} & myUpdates.keys()))
+        return self._check_attributes_updated(updates, STATUS_ATTR, NORMAL_ATTR)

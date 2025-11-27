@@ -5,19 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 from homeassistant.components.water_heater import (
     WaterHeaterEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_HOST,
     STATE_IDLE,
     STATE_OFF,
     STATE_ON,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-import pytest
-
-from custom_components.intellicenter import DOMAIN
 from pyintellicenter import (
     BODY_TYPE,
     HEATER_ATTR,
@@ -30,6 +25,8 @@ from pyintellicenter import (
     PoolModel,
     PoolObject,
 )
+import pytest
+
 from custom_components.intellicenter.water_heater import PoolWaterHeater
 
 pytestmark = pytest.mark.asyncio
@@ -86,18 +83,16 @@ def pool_object_heater2() -> PoolObject:
 async def test_water_heater_setup_creates_entities(
     hass: HomeAssistant,
     pool_model: PoolModel,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test water heater platform creates entities for bodies with heaters."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-    entry.data = {CONF_HOST: "192.168.1.100"}
+    # Set up the mock coordinator's model
+    mock_coordinator.model = pool_model
 
-    mock_handler = MagicMock()
-    mock_controller = MagicMock()
-    mock_controller.model = pool_model
-    mock_handler.controller = mock_controller
-
-    hass.data[DOMAIN] = {entry.entry_id: {"handler": mock_handler}}
+    # Create a mock entry with runtime_data
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.runtime_data = mock_coordinator
 
     entities_added = []
 
@@ -106,13 +101,13 @@ async def test_water_heater_setup_creates_entities(
 
     from custom_components.intellicenter.water_heater import async_setup_entry
 
-    await async_setup_entry(hass, entry, capture_entities)
+    await async_setup_entry(hass, mock_entry, capture_entities)
 
     # Should create water heater entities for Pool and Spa bodies
     # (both have heaters in the test data)
     assert len(entities_added) == 2
 
-    water_heater_names = [e._poolObject.sname for e in entities_added]
+    water_heater_names = [e._pool_object.sname for e in entities_added]
     assert "Pool" in water_heater_names
     assert "Spa" in water_heater_names
 
@@ -121,21 +116,20 @@ async def test_water_heater_entity_properties(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
     pool_object_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test PoolWaterHeater entity properties."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = AsyncMock()
-    mock_controller.model = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(return_value=pool_object_heater)
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.model = MagicMock()
+    mock_coordinator.model.__getitem__ = MagicMock(return_value=pool_object_heater)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -152,15 +146,15 @@ async def test_water_heater_entity_properties(
 async def test_water_heater_state_heating(
     hass: HomeAssistant,
     pool_object_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test water heater state when actively heating."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(return_value=pool_object_heater)
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.model.__getitem__ = MagicMock(return_value=pool_object_heater)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     body = PoolObject(
         "POOL1",
@@ -175,7 +169,7 @@ async def test_water_heater_state_heating(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01"])
 
     assert water_heater.state == STATE_ON
 
@@ -183,15 +177,15 @@ async def test_water_heater_state_heating(
 async def test_water_heater_state_idle(
     hass: HomeAssistant,
     pool_object_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test water heater state when idle (at temperature)."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(return_value=pool_object_heater)
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.model.__getitem__ = MagicMock(return_value=pool_object_heater)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     body = PoolObject(
         "POOL1",
@@ -206,7 +200,7 @@ async def test_water_heater_state_idle(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01"])
 
     assert water_heater.state == STATE_IDLE
 
@@ -214,15 +208,15 @@ async def test_water_heater_state_idle(
 async def test_water_heater_state_off(
     hass: HomeAssistant,
     pool_object_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test water heater state when off."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(return_value=pool_object_heater)
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.model.__getitem__ = MagicMock(return_value=pool_object_heater)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     body = PoolObject(
         "POOL1",
@@ -237,21 +231,21 @@ async def test_water_heater_state_off(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01"])
 
     assert water_heater.state == STATE_OFF
 
 
 async def test_water_heater_state_no_heater(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test water heater state when no heater assigned."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     body = PoolObject(
         "POOL1",
@@ -266,7 +260,7 @@ async def test_water_heater_state_no_heater(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01"])
 
     assert water_heater.state == STATE_OFF
 
@@ -274,27 +268,27 @@ async def test_water_heater_state_no_heater(
 async def test_water_heater_set_temperature(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting target temperature."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
+    water_heater.hass = hass  # Required for async_create_task
 
     await water_heater.async_set_temperature(**{ATTR_TEMPERATURE: 80})
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert LOTMP_ATTR in args[1]
     assert args[1][LOTMP_ATTR] == "80"
@@ -303,19 +297,18 @@ async def test_water_heater_set_temperature(
 async def test_water_heater_set_temperature_invalid(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting invalid temperature (should be handled gracefully)."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -323,21 +316,21 @@ async def test_water_heater_set_temperature_invalid(
     # This should log an error but not crash
     await water_heater.async_set_temperature(**{ATTR_TEMPERATURE: "invalid"})
 
-    # Should not call requestChanges for invalid value
-    mock_controller.requestChanges.assert_not_called()
+    # Should not call request_changes for invalid value
+    mock_coordinator.controller.request_changes.assert_not_called()
 
 
 async def test_water_heater_turn_on(
     hass: HomeAssistant,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on the water heater."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     body = PoolObject(
         "POOL1",
@@ -352,12 +345,13 @@ async def test_water_heater_turn_on(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01", "HTR02"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01", "HTR02"])
+    water_heater.hass = hass  # Required for async_create_task
 
     await water_heater.async_turn_on()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert HEATER_ATTR in args[1]
     assert args[1][HEATER_ATTR] == "HTR01"  # Uses first heater in list
@@ -367,17 +361,17 @@ async def test_water_heater_turn_on_remembers_last_heater(
     hass: HomeAssistant,
     pool_object_heater: PoolObject,
     pool_object_heater2: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning on uses last heater if available."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
-    mock_controller.model = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
+    mock_coordinator.model = MagicMock()
+    mock_coordinator.model.__getitem__ = MagicMock(
         side_effect=lambda x: pool_object_heater2
         if x == "HTR02"
         else pool_object_heater
@@ -396,7 +390,8 @@ async def test_water_heater_turn_on_remembers_last_heater(
         },
     )
 
-    water_heater = PoolWaterHeater(entry, mock_controller, body, ["HTR01", "HTR02"])
+    water_heater = PoolWaterHeater(mock_coordinator, body, ["HTR01", "HTR02"])
+    water_heater.hass = hass  # Required for async_create_task
 
     # Simulate update that tracks last heater
     updates = {
@@ -414,35 +409,35 @@ async def test_water_heater_turn_on_remembers_last_heater(
     # Turn back on
     await water_heater.async_turn_on()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[1][HEATER_ATTR] == "HTR02"  # Uses remembered heater
 
 
 async def test_water_heater_turn_off(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test turning off the water heater."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
+    water_heater.hass = hass  # Required for async_create_task
 
     await water_heater.async_turn_off()
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert HEATER_ATTR in args[1]
     assert args[1][HEATER_ATTR] == NULL_OBJNAM
@@ -453,24 +448,23 @@ async def test_water_heater_operation_list(
     pool_object_body_with_heater: PoolObject,
     pool_object_heater: PoolObject,
     pool_object_heater2: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test operation mode list."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.model = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(
+    mock_coordinator.model = MagicMock()
+    mock_coordinator.model.__getitem__ = MagicMock(
         side_effect=lambda x: pool_object_heater2
         if x == "HTR02"
         else pool_object_heater
     )
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01", "HTR02"],
     )
@@ -486,29 +480,29 @@ async def test_water_heater_set_operation_mode(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
     pool_object_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting operation mode."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.model = MagicMock()
-    mock_controller.model.__getitem__ = MagicMock(return_value=pool_object_heater)
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.model = MagicMock()
+    mock_coordinator.model.__getitem__ = MagicMock(return_value=pool_object_heater)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
+    water_heater.hass = hass  # Required for async_create_task
 
     await water_heater.async_set_operation_mode("Gas Heater")
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[0] == "POOL1"
     assert HEATER_ATTR in args[1]
     assert args[1][HEATER_ATTR] == "HTR01"
@@ -517,45 +511,44 @@ async def test_water_heater_set_operation_mode(
 async def test_water_heater_set_operation_mode_off(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test setting operation mode to off."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.requestChanges = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.request_changes = AsyncMock()
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
+    water_heater.hass = hass  # Required for async_create_task
 
     await water_heater.async_set_operation_mode(STATE_OFF)
 
-    mock_controller.requestChanges.assert_called_once()
-    args = mock_controller.requestChanges.call_args[0]
+    mock_coordinator.controller.request_changes.assert_called_once()
+    args = mock_coordinator.controller.request_changes.call_args[0]
     assert args[1][HEATER_ATTR] == NULL_OBJNAM
 
 
 async def test_water_heater_supported_features(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test supported features."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -569,18 +562,17 @@ async def test_water_heater_supported_features(
 async def test_water_heater_min_max_temp_fahrenheit(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test min/max temperature in Fahrenheit."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -592,18 +584,14 @@ async def test_water_heater_min_max_temp_fahrenheit(
 async def test_water_heater_min_max_temp_celsius(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test min/max temperature in Celsius."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
-
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: True)
+    # Set uses_metric to True BEFORE creating the water heater
+    type(mock_coordinator.system_info).uses_metric = property(lambda self: True)
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -615,18 +603,17 @@ async def test_water_heater_min_max_temp_celsius(
 async def test_water_heater_is_updated(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test isUpdated method for relevant attributes."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )
@@ -654,18 +641,17 @@ async def test_water_heater_is_updated(
 async def test_water_heater_extra_state_attributes(
     hass: HomeAssistant,
     pool_object_body_with_heater: PoolObject,
+    mock_coordinator: MagicMock,
 ) -> None:
     """Test extra state attributes."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry"
 
-    mock_controller = MagicMock()
-    mock_controller.systemInfo = MagicMock()
-    type(mock_controller.systemInfo).usesMetric = property(lambda self: False)
+    mock_coordinator.controller.system_info = MagicMock()
+    type(mock_coordinator.controller.system_info).uses_metric = property(
+        lambda self: False
+    )
 
     water_heater = PoolWaterHeater(
-        entry,
-        mock_controller,
+        mock_coordinator,
         pool_object_body_with_heater,
         ["HTR01"],
     )

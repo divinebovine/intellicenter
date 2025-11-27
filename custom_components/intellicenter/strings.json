@@ -1,41 +1,66 @@
 {
-    "config": {
-      "flow_title": "Pentair Intellicenter: {name}",
-      "step": {
-        "user": {
-          "title": "Connect to Pentair Intellicenter",
-          "data": {
-            "host": "IP Address"
-          }
-        },
-        "zeroconf_confirm": {
-          "title": "Connect to your Pentair IntelliCenter",
-          "description": "Do you want to setup {name} ({host})?"
+  "config": {
+    "flow_title": "Pentair IntelliCenter: {name}",
+    "step": {
+      "user": {
+        "title": "Setup Pentair IntelliCenter",
+        "description": "Choose how you would like to set up your IntelliCenter system.",
+        "data": {
+          "setup_method": "Setup Method"
         }
       },
-      "error": {
-        "cannot_connect": "Failed to connect",
-        "invalid_host": "Invalid IP address or hostname",
-        "unknown": "Unexpected Error"
+      "discover": {
+        "title": "Select IntelliCenter Device",
+        "description": "Found {count} IntelliCenter device(s) on your network. Select the one you want to configure.",
+        "data": {
+          "device": "Device"
+        }
       },
-      "abort": {
-        "already_configured": "Device is already configured"
+      "manual": {
+        "title": "Enter IntelliCenter Address",
+        "description": "Enter the IP address of your IntelliCenter system.",
+        "data": {
+          "host": "IP Address"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Connect to Pentair IntelliCenter",
+        "description": "Do you want to set up {name} ({host})?"
       }
     },
-    "options": {
-      "step": {
-        "init": {
-          "title": "IntelliCenter Options",
-          "description": "Configure connection settings for your IntelliCenter system.\n\nConnected to: {host}",
-          "data": {
-            "keepalive_interval": "Keepalive interval (seconds)",
-            "reconnect_delay": "Initial reconnect delay (seconds)"
-          },
-          "data_description": {
-            "keepalive_interval": "How often to send keepalive queries to maintain the connection. Range: 30-300 seconds.",
-            "reconnect_delay": "Initial delay before attempting to reconnect after a connection loss. Uses exponential backoff. Range: 10-120 seconds."
-          }
+    "error": {
+      "cannot_connect": "Failed to connect to the IntelliCenter. Please verify the IP address and that the system is powered on.",
+      "invalid_host": "Invalid IP address or hostname.",
+      "unknown": "An unexpected error occurred. Please check the logs for more information."
+    },
+    "abort": {
+      "already_configured": "This IntelliCenter device is already configured.",
+      "cannot_connect": "Failed to connect to the discovered device.",
+      "unknown": "An unexpected error occurred during setup."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "IntelliCenter Options",
+        "description": "Configure connection settings for your IntelliCenter system.\n\nConnected to: {host}",
+        "data": {
+          "keepalive_interval": "Keepalive interval (seconds)",
+          "reconnect_delay": "Initial reconnect delay (seconds)"
+        },
+        "data_description": {
+          "keepalive_interval": "How often to send keepalive queries to maintain the connection. Range: 30-300 seconds.",
+          "reconnect_delay": "Initial delay before attempting to reconnect after a connection loss. Uses exponential backoff. Range: 10-120 seconds."
         }
       }
     }
+  },
+  "selector": {
+    "setup_method": {
+      "options": {
+        "discover": "Discover devices on network",
+        "manual": "Enter IP address manually"
+      }
+    }
   }
+}

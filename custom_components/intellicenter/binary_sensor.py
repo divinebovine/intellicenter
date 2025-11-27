@@ -16,42 +16,44 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-from . import PoolEntity, get_controller
 from pyintellicenter import (
     BODY_ATTR,
     CIRCUIT_TYPE,
     HEATER_ATTR,
     HEATER_TYPE,
     HTMODE_ATTR,
+    PUMP_STATUS_ON,
+    PUMP_TYPE,
+    SCHED_TYPE,
     STATUS_ATTR,
-    ModelController,
+    STATUS_ON,
     PoolObject,
 )
+
+from . import IntelliCenterConfigEntry, PoolEntity
+from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: IntelliCenterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Load pool binary sensors based on a config entry."""
-    controller = get_controller(hass, entry)
+    coordinator = entry.runtime_data
 
     sensors: list[PoolBinarySensor | HeaterBinarySensor] = []
 
     obj: PoolObject
-    for obj in controller.model.objectList:
+    for obj in coordinator.model:
         if obj.objtype == CIRCUIT_TYPE and obj.subtype == "FRZ":
             sensors.append(
                 PoolBinarySensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                     icon="mdi:snowflake",
                     device_class=BinarySensorDeviceClass.COLD,
@@ -60,30 +62,27 @@ async def async_setup_entry(
         elif obj.objtype == HEATER_TYPE:
             sensors.append(
                 HeaterBinarySensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                 )
             )
-        elif obj.objtype == "SCHED":
+        elif obj.objtype == SCHED_TYPE:
             sensors.append(
                 PoolBinarySensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                     attribute_key="ACT",
                     name="+ (schedule)",
                     enabled_by_default=False,
-                    extraStateAttributes={"VACFLO"},
+                    extra_state_attributes=["VACFLO"],
                 )
             )
-        elif obj.objtype == "PUMP":
+        elif obj.objtype == PUMP_TYPE:
             sensors.append(
                 PoolBinarySensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
-                    valueForON="10",
+                    value_for_on=PUMP_STATUS_ON,
                     device_class=BinarySensorDeviceClass.RUNNING,
                 )
             )
@@ -93,7 +92,7 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolBinarySensor(PoolEntity, BinarySensorEntity):  # type: ignore[misc]
+class PoolBinarySensor(PoolEntity, BinarySensorEntity):
     """Representation of a Pentair Binary Sensor.
 
     Used for freeze protection, schedule status, and pump running status.
@@ -101,38 +100,36 @@ class PoolBinarySensor(PoolEntity, BinarySensorEntity):  # type: ignore[misc]
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
-        valueForON: str = "ON",
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
+        value_for_on: str = STATUS_ON,
         device_class: BinarySensorDeviceClass | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a pool binary sensor.
 
         Args:
-            entry: The config entry for this integration
-            controller: The ModelController managing the connection
-            poolObject: The PoolObject this sensor represents
-            valueForON: The attribute value that indicates "on" state
+            coordinator: The coordinator for this integration
+            pool_object: The PoolObject this sensor represents
+            value_for_on: The attribute value that indicates "on" state
             device_class: The device class for this sensor
             **kwargs: Additional arguments passed to PoolEntity
         """
-        super().__init__(entry, controller, poolObject, **kwargs)
-        self._valueForON = valueForON
+        super().__init__(coordinator, pool_object, **kwargs)
+        self._value_for_on = value_for_on
         if device_class:
             self._attr_device_class = device_class
 
     @property
     def is_on(self) -> bool:
         """Return true if sensor is on."""
-        return bool(self._poolObject[self._attribute_key] == self._valueForON)
+        return bool(self._pool_object[self._attribute_key] == self._value_for_on)
 
 
 # -------------------------------------------------------------------------------------
 
 
-class HeaterBinarySensor(PoolEntity, BinarySensorEntity):  # type: ignore[misc]
+class HeaterBinarySensor(PoolEntity, BinarySensorEntity):
     """Representation of a Heater binary sensor.
 
     Tracks whether a heater is actively heating any body of water.
@@ -143,33 +140,31 @@ class HeaterBinarySensor(PoolEntity, BinarySensorEntity):  # type: ignore[misc]
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
         **kwargs: Any,
     ) -> None:
         """Initialize a heater binary sensor.
 
         Args:
-            entry: The config entry for this integration
-            controller: The ModelController managing the connection
-            poolObject: The PoolObject (heater) this sensor represents
+            coordinator: The coordinator for this integration
+            pool_object: The PoolObject (heater) this sensor represents
             **kwargs: Additional arguments passed to PoolEntity
         """
-        super().__init__(entry, controller, poolObject, **kwargs)
-        body_attr = poolObject[BODY_ATTR]
+        super().__init__(coordinator, pool_object, **kwargs)
+        body_attr = pool_object[BODY_ATTR]
         self._bodies: set[str] = set(body_attr.split(" ")) if body_attr else set()
 
     @property
     def is_on(self) -> bool:
         """Return true if the heater is actively heating."""
         for body_objnam in self._bodies:
-            body = self._controller.model[body_objnam]
+            body = self.coordinator.model[body_objnam]
             if body is None:
                 continue
             if (
-                body[STATUS_ATTR] == "ON"
-                and body[HEATER_ATTR] == self._poolObject.objnam
+                body[STATUS_ATTR] == STATUS_ON
+                and body[HEATER_ATTR] == self._pool_object.objnam
                 and body[HTMODE_ATTR] != "0"
             ):
                 return True
@@ -194,7 +189,7 @@ class HeaterBinarySensor(PoolEntity, BinarySensorEntity):  # type: ignore[misc]
                 return True
 
         # Also check if the heater object itself was updated
-        if self._poolObject.objnam in updates:
+        if self._pool_object.objnam in updates:
             return True
 
         return False

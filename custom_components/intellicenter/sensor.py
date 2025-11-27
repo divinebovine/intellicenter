@@ -16,13 +16,9 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-from . import PoolEntity, get_controller
-from .const import CONST_GPM, CONST_RPM
 from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
@@ -40,9 +36,12 @@ from pyintellicenter import (
     SALT_ATTR,
     SENSE_TYPE,
     SOURCE_ATTR,
-    ModelController,
     PoolObject,
 )
+
+from . import IntelliCenterConfigEntry, PoolEntity
+from .const import CONST_GPM, CONST_RPM
+from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,21 +50,20 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: IntelliCenterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Load pool sensors based on a config entry."""
-    controller = get_controller(hass, entry)
+    coordinator = entry.runtime_data
 
     sensors: list[PoolSensor] = []
 
     obj: PoolObject
-    for obj in controller.model.objectList:
+    for obj in coordinator.model:
         if obj.objtype == SENSE_TYPE:
             sensors.append(
                 PoolSensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                     device_class=SensorDeviceClass.TEMPERATURE,
                     attribute_key=SOURCE_ATTR,
@@ -75,8 +73,7 @@ async def async_setup_entry(
             if obj[PWR_ATTR]:
                 sensors.append(
                     PoolSensor(
-                        entry,
-                        controller,
+                        coordinator,
                         obj,
                         device_class=SensorDeviceClass.POWER,
                         unit_of_measurement=UnitOfPower.WATT,
@@ -88,8 +85,7 @@ async def async_setup_entry(
             if obj[RPM_ATTR]:
                 sensors.append(
                     PoolSensor(
-                        entry,
-                        controller,
+                        coordinator,
                         obj,
                         device_class=None,
                         unit_of_measurement=CONST_RPM,
@@ -100,8 +96,7 @@ async def async_setup_entry(
             if obj[GPM_ATTR]:
                 sensors.append(
                     PoolSensor(
-                        entry,
-                        controller,
+                        coordinator,
                         obj,
                         device_class=None,
                         unit_of_measurement=CONST_GPM,
@@ -112,8 +107,7 @@ async def async_setup_entry(
         elif obj.objtype == BODY_TYPE:
             sensors.append(
                 PoolSensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                     device_class=SensorDeviceClass.TEMPERATURE,
                     attribute_key=LSTTMP_ATTR,
@@ -122,8 +116,7 @@ async def async_setup_entry(
             )
             sensors.append(
                 PoolSensor(
-                    entry,
-                    controller,
+                    coordinator,
                     obj,
                     device_class=SensorDeviceClass.TEMPERATURE,
                     attribute_key=LOTMP_ATTR,
@@ -132,55 +125,50 @@ async def async_setup_entry(
             )
         elif obj.objtype == CHEM_TYPE:
             if obj.subtype == "ICHEM":
-                if PHVAL_ATTR in obj.attributes:
+                if PHVAL_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=SensorDeviceClass.PH,
                             attribute_key=PHVAL_ATTR,
                             name="+ (pH)",
                         )
                     )
-                if ORPVAL_ATTR in obj.attributes:
+                if ORPVAL_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=None,
                             attribute_key=ORPVAL_ATTR,
                             name="+ (ORP)",
                         )
                     )
-                if QUALTY_ATTR in obj.attributes:
+                if QUALTY_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=None,
                             attribute_key=QUALTY_ATTR,
                             name="+ (Water Quality)",
                         )
                     )
-                if PHTNK_ATTR in obj.attributes:
+                if PHTNK_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=None,
                             attribute_key=PHTNK_ATTR,
                             name="+ (Ph Tank Level)",
                         )
                     )
-                if ORPTNK_ATTR in obj.attributes:
+                if ORPTNK_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=None,
                             attribute_key=ORPTNK_ATTR,
@@ -188,11 +176,10 @@ async def async_setup_entry(
                         )
                     )
             elif obj.subtype == "ICHLOR":
-                if SALT_ATTR in obj.attributes:
+                if SALT_ATTR in obj.attribute_keys:
                     sensors.append(
                         PoolSensor(
-                            entry,
-                            controller,
+                            coordinator,
                             obj,
                             device_class=None,
                             unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
@@ -206,7 +193,7 @@ async def async_setup_entry(
 # -------------------------------------------------------------------------------------
 
 
-class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
+class PoolSensor(PoolEntity, SensorEntity):
     """Representation of a Pentair sensor.
 
     Supports temperature, power, and chemistry measurements with optional
@@ -215,9 +202,8 @@ class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
 
     def __init__(
         self,
-        entry: ConfigEntry,
-        controller: ModelController,
-        poolObject: PoolObject,
+        coordinator: IntelliCenterCoordinator,
+        pool_object: PoolObject,
         device_class: SensorDeviceClass | None,
         rounding_factor: int = 0,
         **kwargs: Any,
@@ -225,14 +211,13 @@ class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
         """Initialize a pool sensor.
 
         Args:
-            entry: The config entry for this integration
-            controller: The ModelController managing the connection
-            poolObject: The PoolObject this sensor represents
+            coordinator: The coordinator for this integration
+            pool_object: The PoolObject this sensor represents
             device_class: The device class for this sensor
             rounding_factor: If non-zero, round values to this factor
             **kwargs: Additional arguments passed to PoolEntity
         """
-        super().__init__(entry, controller, poolObject, **kwargs)
+        super().__init__(coordinator, pool_object, **kwargs)
         self._attr_device_class = device_class
         self._rounding_factor = rounding_factor
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -245,7 +230,7 @@ class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
         so rounding their value to a nearest multiplier of 'rounding_factor'
         smooths the curve and limits the number of updates in the log.
         """
-        raw_value = self._poolObject[self._attribute_key]
+        raw_value = self._pool_object[self._attribute_key]
         if raw_value is None:
             return None
 
@@ -269,16 +254,3 @@ class PoolSensor(PoolEntity, SensorEntity):  # type: ignore[misc]
         if self._attr_device_class == SensorDeviceClass.TEMPERATURE:
             return self.pentairTemperatureSettings()
         return self._attr_native_unit_of_measurement
-
-    def isUpdated(self, updates: dict[str, dict[str, Any]]) -> bool:
-        """Return true if the entity is updated by the updates from IntelliCenter.
-
-        Checks if the specific attribute this sensor monitors was updated.
-
-        Args:
-            updates: Dictionary of object updates
-
-        Returns:
-            True if this sensor's monitored attribute was updated
-        """
-        return self._attribute_key in updates.get(self._poolObject.objnam, {})

@@ -4,14 +4,9 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
-from pyintellicenter import (
-    ModelController,
-    PoolModel,
-    PoolObject,
-    SystemInfo,
-)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
 from pyintellicenter import (
     BODY_TYPE,
     CHEM_TYPE,
@@ -21,7 +16,14 @@ from pyintellicenter import (
     SCHED_TYPE,
     SENSE_TYPE,
     SYSTEM_TYPE,
+    ICModelController,
+    ICSystemInfo,
+    PoolModel,
+    PoolObject,
 )
+import pytest
+
+from custom_components.intellicenter.coordinator import IntelliCenterCoordinator
 
 # Enable custom integrations
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -34,27 +36,27 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture
-def mock_system_info() -> SystemInfo:
-    """Return a mock SystemInfo object."""
-    mock_info = MagicMock(spec=SystemInfo)
+def mock_system_info() -> ICSystemInfo:
+    """Return a mock ICSystemInfo object."""
+    mock_info = MagicMock(spec=ICSystemInfo)
     # Configure property return values using PropertyMock
-    type(mock_info).uniqueID = property(lambda self: "test-unique-id-123")
-    type(mock_info).propName = property(lambda self: "Test Pool System")
-    type(mock_info).swVersion = property(lambda self: "2.0.0")
-    type(mock_info).usesMetric = property(lambda self: False)
+    type(mock_info).unique_id = property(lambda self: "test-unique-id-123")
+    type(mock_info).prop_name = property(lambda self: "Test Pool System")
+    type(mock_info).sw_version = property(lambda self: "2.0.0")
+    type(mock_info).uses_metric = property(lambda self: False)
     return mock_info
 
 
 @pytest.fixture
-def mock_controller(mock_system_info: SystemInfo) -> Generator[MagicMock, None, None]:
-    """Return a mock BaseController."""
+def mock_controller(mock_system_info: ICSystemInfo) -> Generator[MagicMock]:
+    """Return a mock ICBaseController."""
     with patch(
-        "custom_components.intellicenter.config_flow.BaseController"
+        "custom_components.intellicenter.config_flow.ICBaseController"
     ) as mock_controller_class:
         mock_instance = MagicMock()
         mock_instance.start = AsyncMock()
-        mock_instance.stop = MagicMock()
-        mock_instance.systemInfo = mock_system_info
+        mock_instance.stop = AsyncMock()
+        mock_instance.system_info = mock_system_info
         mock_controller_class.return_value = mock_instance
         yield mock_instance
 
@@ -224,7 +226,7 @@ def pool_model_data() -> list[dict[str, Any]]:
 def pool_model(pool_model_data: list[dict[str, Any]]) -> PoolModel:
     """Return a PoolModel with test data."""
     model = PoolModel()
-    model.addObjects(pool_model_data)
+    model.add_objects(pool_model_data)
     return model
 
 
@@ -297,32 +299,89 @@ def pool_object_body() -> PoolObject:
 @pytest.fixture
 def mock_model_controller(
     pool_model: PoolModel,
-) -> Generator[ModelController, None, None]:
-    """Return a mock ModelController for integration tests."""
+) -> Generator[ICModelController]:
+    """Return a mock ICModelController for integration tests."""
     with patch(
-        "custom_components.intellicenter.ModelController"
+        "custom_components.intellicenter.ICModelController"
     ) as mock_controller_class:
-        mock_instance = MagicMock(spec=ModelController)
+        mock_instance = MagicMock(spec=ICModelController)
         mock_instance.start = AsyncMock()
-        mock_instance.stop = MagicMock()
-        mock_instance.requestChanges = AsyncMock()
+        mock_instance.stop = AsyncMock()
+        mock_instance.request_changes = AsyncMock()
         mock_instance.model = pool_model
 
         # Add system info properties
         system_obj = pool_model["SYS01"]
-        mock_instance.systemInfo = MagicMock()
-        type(mock_instance.systemInfo).uniqueID = property(
+        mock_instance.system_info = MagicMock()
+        type(mock_instance.system_info).unique_id = property(
             lambda self: "test-unique-id-123"
         )
-        type(mock_instance.systemInfo).propName = property(
+        type(mock_instance.system_info).prop_name = property(
             lambda self: system_obj.properties.get("PROPNAME", "Test Pool System")
         )
-        type(mock_instance.systemInfo).swVersion = property(
+        type(mock_instance.system_info).sw_version = property(
             lambda self: system_obj.properties.get("VER", "2.0.0")
         )
-        type(mock_instance.systemInfo).usesMetric = property(
+        type(mock_instance.system_info).uses_metric = property(
             lambda self: system_obj.properties.get("MODE") == "METRIC"
         )
 
         mock_controller_class.return_value = mock_instance
         yield mock_instance
+
+
+@pytest.fixture
+def mock_coordinator(
+    hass: HomeAssistant,
+    pool_model: PoolModel,
+) -> MagicMock:
+    """Return a mock IntelliCenterCoordinator for entity tests."""
+    mock_coord = MagicMock(spec=IntelliCenterCoordinator)
+
+    # Configure hass reference (needed for async_create_task in entities)
+    mock_coord.hass = hass
+
+    # Configure entry
+    mock_entry = MagicMock(spec=ConfigEntry)
+    mock_entry.entry_id = "test_entry"
+    mock_entry.data = {CONF_HOST: "192.168.1.100"}
+    mock_coord.config_entry = mock_entry
+
+    # Configure model
+    mock_coord.model = pool_model
+
+    # Configure controller
+    mock_controller = MagicMock()
+    mock_controller.request_changes = AsyncMock()
+    mock_coord.controller = mock_controller
+
+    # Configure system info
+    system_obj = pool_model["SYS01"]
+    mock_coord.system_info = MagicMock()
+    type(mock_coord.system_info).unique_id = property(lambda self: "test-unique-id-123")
+    type(mock_coord.system_info).prop_name = property(
+        lambda self: system_obj.properties.get("PROPNAME", "Test Pool System")
+    )
+    type(mock_coord.system_info).sw_version = property(
+        lambda self: system_obj.properties.get("VER", "2.0.0")
+    )
+    type(mock_coord.system_info).uses_metric = property(
+        lambda self: system_obj.properties.get("MODE") == "METRIC"
+    )
+
+    # Configure connection state
+    mock_coord.connected = True
+
+    return mock_coord
+
+
+@pytest.fixture
+def mock_config_entry() -> MagicMock:
+    """Return a mock config entry for tests."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry"
+    entry.data = {CONF_HOST: "192.168.1.100"}
+    entry.options = {}
+    entry.async_on_unload = MagicMock()
+    entry.add_update_listener = MagicMock()
+    return entry
