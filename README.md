@@ -2,40 +2,12 @@
 
 Control your Pentair IntelliCenter pool system directly from Home Assistant with real-time local updates.
 
-## Credits
-
-This integration builds upon the excellent work of:
-
-- **[@dwradcliffe](https://github.com/dwradcliffe)** - [Original intellicenter integration](https://github.com/dwradcliffe/intellicenter) that pioneered Home Assistant support for Pentair IntelliCenter
-- **[@jlvaillant](https://github.com/jlvaillant)** - [Enhanced fork](https://github.com/jlvaillant/intellicenter) with additional features and improvements
-
-We extend our sincere gratitude for their foundational work that made this integration possible.
-
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
 [![HACS][hacsbadge]][hacs]
 [![CI][ci-badge]][ci-workflow]
 [![Quality Scale][quality-badge]][quality-scale]
 [![Project Maintenance][maintenance-shield]][user_profile]
-
-## Quality Tier: Platinum Certified
-
-This integration meets the **Platinum tier** quality standards for Home Assistant integrations - the highest level achievable.
-
-**Platinum Requirements:**
-- Fully async architecture with optimized performance
-- Comprehensive type annotations (mypy strict mode)
-- Detailed code documentation throughout
-- Production hardening with circuit breaker and health monitoring
-
-**Gold Requirements:**
-- Full translation support (12 languages)
-- Easy reconfiguration through the UI
-- Comprehensive automated testing (175+ tests)
-- Extensive user-friendly documentation
-- Automatic Zeroconf discovery
-
-Plus all Silver and Bronze tier requirements met.
 
 ## What Does This Integration Do?
 
@@ -275,6 +247,34 @@ See [docs/](docs/) for architecture documentation and development guidelines.
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+
+## Quality Tier: Platinum Certified
+
+This integration meets the **Platinum tier** quality standards for Home Assistant integrations - the highest level achievable.
+
+**Platinum Requirements:**
+- Fully async architecture with optimized performance
+- Comprehensive type annotations (mypy strict mode)
+- Detailed code documentation throughout
+- Production hardening with circuit breaker and health monitoring
+
+**Gold Requirements:**
+- Full translation support (12 languages)
+- Easy reconfiguration through the UI
+- Comprehensive automated testing (175+ tests)
+- Extensive user-friendly documentation
+- Automatic Zeroconf discovery
+
+Plus all Silver and Bronze tier requirements met.
+
+## Credits
+
+This integration builds upon the excellent work of:
+
+- **[@jlvaillant](https://github.com/jlvaillant)** - [Original intellicenter integration](https://github.com/jlvaillant/intellicenter) that pioneered Home Assistant support for Pentair IntelliCenter
+- **[@dwradcliffe](https://github.com/dwradcliffe)** - [Enhanced fork](https://github.com/dwradcliffe/intellicenter) with connection fixes and improvements
+
+We extend our sincere gratitude for their foundational work that made this integration possible.
 
 ---
 
