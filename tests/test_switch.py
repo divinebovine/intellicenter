@@ -72,6 +72,7 @@ async def test_circuit_switch_turn_on(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning on a circuit switch."""
     switch = PoolCircuit(mock_coordinator, pool_object_switch)
@@ -85,12 +86,15 @@ async def test_circuit_switch_turn_on(
     assert args[0] == "CIRC01"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
+    # Verify optimistic update was called
+    mock_write_ha_state.assert_called()
 
 
 async def test_circuit_switch_turn_off(
     hass: HomeAssistant,
     pool_object_switch: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning off a circuit switch."""
     # Set switch to ON initially
@@ -128,6 +132,7 @@ async def test_body_switch_turn_on(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning on a body switch."""
     # Set body to OFF initially
@@ -150,6 +155,7 @@ async def test_body_switch_turn_off(
     hass: HomeAssistant,
     pool_object_body: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning off a body switch."""
     body_switch = PoolBody(mock_coordinator, pool_object_body)

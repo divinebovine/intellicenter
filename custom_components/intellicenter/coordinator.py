@@ -79,7 +79,7 @@ from pyintellicenter import (
     PoolModel,
 )
 
-from .const import DOMAIN
+from .const import DEFAULT_TRANSPORT, DOMAIN, TransportType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -174,6 +174,7 @@ class IntelliCenterCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
         host: str,
         keepalive_interval: int = 90,
         reconnect_delay: int = 30,
+        transport: TransportType = DEFAULT_TRANSPORT,
     ) -> None:
         """Initialize the coordinator.
 
@@ -183,6 +184,7 @@ class IntelliCenterCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
             host: The IP address or hostname of the IntelliCenter
             keepalive_interval: How often to send keepalive queries (seconds)
             reconnect_delay: Initial delay before reconnection attempts (seconds)
+            transport: Transport type ("tcp" or "websocket")
         """
         super().__init__(
             hass,
@@ -195,6 +197,7 @@ class IntelliCenterCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
         self._host = host
         self._keepalive_interval = keepalive_interval
         self._reconnect_delay = reconnect_delay
+        self._transport = transport
 
         # Create the model with attribute tracking
         self._model = PoolModel(DEFAULT_ATTRIBUTES_MAP)
@@ -204,6 +207,7 @@ class IntelliCenterCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
             host,
             self._model,
             keepalive_interval=keepalive_interval,
+            transport=transport,
         )
 
         # Create the connection handler

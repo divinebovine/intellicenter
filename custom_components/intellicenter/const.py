@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 # Integration domain
 DOMAIN = "intellicenter"
 
@@ -12,10 +14,17 @@ CONST_GPM = "gpm"  # gallons per minute
 # Configuration option keys
 CONF_KEEPALIVE_INTERVAL = "keepalive_interval"
 CONF_RECONNECT_DELAY = "reconnect_delay"
+CONF_TRANSPORT = "transport"
+
+# Transport type values
+TRANSPORT_TCP = "tcp"
+TRANSPORT_WEBSOCKET = "websocket"
+TransportType = Literal["tcp", "websocket"]
 
 # Default values for configuration options
 DEFAULT_KEEPALIVE_INTERVAL = 90  # seconds
 DEFAULT_RECONNECT_DELAY = 30  # seconds
+DEFAULT_TRANSPORT = "tcp"  # type: TransportType
 
 # Minimum/maximum values for configuration options
 MIN_KEEPALIVE_INTERVAL = 30

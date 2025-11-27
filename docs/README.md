@@ -1,217 +1,191 @@
-# IntelliCenter Integration Documentation
+# IntelliCenter Developer Documentation
 
-This directory contains technical documentation for the Pentair IntelliCenter Home Assistant integration.
+Technical documentation for developers working on the Pentair IntelliCenter Home Assistant integration.
+
+| Metric | Value |
+|--------|-------|
+| **Current Version** | 3.5.0 |
+| **Quality Scale** | Platinum |
+| **Test Coverage** | 175+ tests |
+| **Home Assistant** | 2025.11+ required |
+| **pyintellicenter** | 0.1.1+ required |
 
 ## Documentation Index
 
-### Project Documentation
+| Document | Description |
+|----------|-------------|
+| [CHANGELOG.md](./CHANGELOG.md) | Version history and release notes |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical architecture and design |
+| [QUALITY_SCALE_COMPLIANCE.md](./QUALITY_SCALE_COMPLIANCE.md) | Home Assistant quality scale compliance |
 
-#### [CHANGELOG.md](./CHANGELOG.md)
-Version history and release notes for the integration.
+## Project Structure
 
-#### [TESTING.md](./TESTING.md)
-Comprehensive testing guide including:
-- Test framework setup
-- Running tests
-- Coverage reports
-- CI/CD integration
-
-#### [QUALITY_SCALE_COMPLIANCE.md](./QUALITY_SCALE_COMPLIANCE.md)
-Home Assistant Quality Scale compliance tracking (current: Gold ✅).
-
-#### [VALIDATION.md](./VALIDATION.md)
-Validation checklist and compliance verification.
-
-#### [info.md](./info.md)
-HACS integration metadata and information.
-
----
-
-### Implementation Guides
-
-#### [Valve Control Implementation](./valve-control-implementation.md)
-**Status:** Ready for Implementation
-**Date:** 2025-01-15
-
-Complete guide for implementing valve control using Home Assistant Select entities.
-
-**Contents:**
-- Live system analysis from IntelliCenter @ 10.100.11.60
-- Protocol specification and JSON examples
-- Step-by-step implementation guide
-- Complete code with unit tests
-- Testing strategy
-- Future enhancement roadmap
-
-**Quick Start:**
-```bash
-# Review the valve data
-cat docs/valve_objects.json
-
-# Run the exploration script
-python3 docs/explore_valves.py 10.100.11.60
-
-# Follow implementation in valve-control-implementation.md
+```
+intellicenter/
+├── custom_components/intellicenter/
+│   ├── __init__.py          # Entry point, PoolEntity base class
+│   ├── config_flow.py       # UI configuration flow
+│   ├── coordinator.py       # Connection coordination
+│   ├── diagnostics.py       # Diagnostic data export
+│   ├── const.py             # Constants
+│   ├── manifest.json        # Integration metadata
+│   ├── strings.json         # English strings (source)
+│   ├── translations/        # 12 language translations
+│   └── Platforms:
+│       ├── light.py         # Pool/spa lights
+│       ├── switch.py        # Circuits, bodies
+│       ├── sensor.py        # Temperature, chemistry
+│       ├── binary_sensor.py # Pumps, schedules
+│       ├── water_heater.py  # Heater control
+│       ├── number.py        # Setpoints
+│       └── cover.py         # Pool covers
+├── tests/                   # 175+ automated tests
+├── docs/                    # This documentation
+└── README.md                # User guide
 ```
 
-#### [Valve Findings Summary](./VALVE_FINDINGS_SUMMARY.md)
-**Status:** Executive Summary
-**Date:** 2025-01-15
+## Related Projects
 
-Quick reference guide for valve control implementation findings.
+| Project | Repository | Description |
+|---------|------------|-------------|
+| **intellicenter** | [joyfulhouse/intellicenter](https://github.com/joyfulhouse/intellicenter) | Home Assistant integration (this repo) |
+| **pyintellicenter** | [joyfulhouse/pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) | Protocol library ([PyPI](https://pypi.org/project/pyintellicenter/)) |
 
----
+### Package Separation
 
-## Supporting Files
+As of v3.5.0, the protocol layer has been extracted to a standalone package:
 
-### Live System Data
+- **pyintellicenter** handles all TCP communication, protocol parsing, and state management
+- **intellicenter** focuses on Home Assistant entity creation and integration
 
-#### `valve_objects.json`
-Raw JSON dump of all valve objects discovered in the live system.
+This separation enables:
+- Independent versioning and releases
+- Reuse of the protocol library in non-HA projects
+- Cleaner testing and development workflows
 
-**Contents:**
-- 4 VALVE objects with complete attribute sets
-- All 81 objects from the IntelliCenter system
-- Metadata about object types and counts
+## Development Setup
 
-**Usage:**
-```python
-import json
+### Prerequisites
 
-with open('docs/valve_objects.json') as f:
-    data = json.load(f)
+- Python 3.12+
+- uv package manager
+- Home Assistant dev environment (for testing)
 
-print(f"Found {data['valve_count']} valves")
-for valve in data['valves']:
-    print(f"  {valve['objnam']}: {valve['params']['SNAME']} = {valve['params']['ASSIGN']}")
-```
-
-### Exploration Tools
-
-#### `explore_valves.py`
-Python script to connect to a live IntelliCenter system and extract valve information.
-
-**Usage:**
-```bash
-# Connect to IntelliCenter and discover valves
-python3 explore_valves.py <ip_address>
-
-# Example
-python3 explore_valves.py 10.100.11.60
-
-# Output
-# - Console: Formatted valve information
-# - File: valve_objects.json (all discovered objects)
-```
-
-**Features:**
-- Connects via TCP to IntelliCenter (port 6681)
-- Sends GetParamList command
-- Filters for VALVE object types
-- Saves complete JSON for analysis
-- Reports all object types found in system
-
----
-
-## Development Status
-
-### Completed Features
-
-- ✅ **Bronze Quality Scale** - Basic integration, config flow, tests
-- ✅ **Silver Quality Scale** - Error handling, documentation
-- ✅ **Gold Quality Scale** - Zeroconf, diagnostics, 59 tests
-- ✅ **Valve Analysis** - Protocol verified, live system tested
-
-### Planned Features
-
-- ⏳ **Valve Control** - Select entity implementation (ready to code)
-- ⏳ **Platinum Quality Scale** - Type annotations, code comments
-- ⏳ **Extended Coverage** - Additional equipment types
-
----
-
-## Contributing
-
-When adding new documentation:
-
-1. **Create markdown files** in this directory
-2. **Update this README** with links to new docs
-3. **Follow the template** from valve-control-implementation.md:
-   - Executive summary
-   - Live system analysis
-   - Protocol specification
-   - Implementation guide
-   - Testing strategy
-   - Future enhancements
-4. **Include code examples** that are copy-paste ready
-5. **Document real data** from live systems when possible
-
-### Documentation Standards
-
-- Use clear, descriptive headings
-- Include table of contents for long documents
-- Provide code examples in fenced code blocks
-- Specify file paths relative to repository root
-- Include version and date information
-- Link to related files and documentation
-
----
-
-## Research Tools
-
-### IntelliCenter Protocol Explorer
-
-The `explore_valves.py` script can be adapted for exploring other object types:
-
-```python
-# Modify line 76 to filter for different object types
-if objtyp == "VALVE":  # Change to "PUMP", "CIRCUIT", etc.
-```
-
-### Quick Analysis Commands
+### Quick Start
 
 ```bash
-# Count object types in live system
-jq '.all_objects[].params.OBJTYP' docs/valve_objects.json | sort | uniq -c
+# Clone repositories
+git clone https://github.com/joyfulhouse/intellicenter.git
+git clone https://github.com/joyfulhouse/pyintellicenter.git
 
-# Find all objects with specific attribute
-jq '.all_objects[] | select(.params.ASSIGN != null)' docs/valve_objects.json
+# Install dependencies
+cd intellicenter
+uv sync
 
-# List all valve names
-jq -r '.valves[].params.SNAME' docs/valve_objects.json
+# Install pyintellicenter in dev mode (for local changes)
+uv pip install -e ../pyintellicenter
+
+# Run tests
+uv run pytest
+
+# Lint and format
+uv run ruff check --fix && uv run ruff format
+
+# Type checking
+uv run mypy custom_components/intellicenter/ --ignore-missing-imports
 ```
 
----
+### Testing
 
-## References
+```bash
+# All tests
+uv run pytest
 
-### External Documentation
+# With coverage
+uv run pytest --cov=custom_components/intellicenter --cov-report=html
 
-- [Home Assistant Developer Docs](https://developers.home-assistant.io/)
-- [Home Assistant Quality Scale](https://www.home-assistant.io/docs/quality_scale/)
-- [IntelliCenter Product Page](https://www.pentair.com/en-us/products/residential/pool-spa-equipment/pool-automation/intellicenter.html)
+# Specific test file
+uv run pytest tests/test_config_flow.py -v
 
-### Related Projects
-
-- [Original Integration](https://github.com/dwradcliffe/intellicenter)
-- [HACS](https://hacs.xyz/)
-- [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)
-
----
-
-## File Organization
-
-```
-docs/
-├── README.md                           # This file
-├── valve-control-implementation.md     # Valve implementation guide
-├── valve_objects.json                  # Live system data
-├── explore_valves.py                   # Exploration script
-└── VALVE_IMPLEMENTATION_ANALYSIS.md    # Original analysis (deprecated, see valve-control-implementation.md)
+# Run with verbose output
+uv run pytest -v
 ```
 
----
+## Architecture Overview
 
-**Last Updated:** 2025-01-15
-**Integration Version:** 2.2.0 (Gold Quality Scale)
-**Maintained By:** joyfulhouse/intellicenter
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Home Assistant                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │           intellicenter integration              │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐           │   │
+│  │  │ light   │ │ switch  │ │ sensor  │  ...      │   │
+│  │  └────┬────┘ └────┬────┘ └────┬────┘           │   │
+│  │       └───────────┼───────────┘                 │   │
+│  │                   │                             │   │
+│  │  ┌────────────────┴──────────────────────┐     │   │
+│  │  │     PoolEntity + Coordinator           │     │   │
+│  │  └────────────────┬──────────────────────┘     │   │
+│  └───────────────────┼─────────────────────────────┘   │
+│                      │                                  │
+│  ┌───────────────────┼─────────────────────────────┐   │
+│  │              pyintellicenter                     │   │
+│  │  ICProtocol → Controllers → PoolModel           │   │
+│  └───────────────────┼─────────────────────────────┘   │
+└──────────────────────┼──────────────────────────────────┘
+                       │
+              TCP/6681 (local)
+                       │
+            ┌──────────┴──────────┐
+            │  Pentair            │
+            │  IntelliCenter      │
+            └─────────────────────┘
+```
+
+### Key Components
+
+**Home Assistant Layer (`intellicenter`):**
+- Platform modules create entities based on pool equipment
+- `PoolEntity` base class provides common functionality
+- `IntelliCenterCoordinator` manages connection lifecycle
+- Config flow handles setup, discovery, and options
+
+**Protocol Layer (`pyintellicenter`):**
+- `ICProtocol` handles TCP transport and message framing
+- `ModelController` manages state and attribute tracking
+- `PoolModel` represents pool equipment as objects
+- `ConnectionHandler` implements reconnection logic
+
+### Data Flow
+
+1. IntelliCenter sends `NotifyList` messages when equipment changes
+2. `ModelController` updates the `PoolModel` state
+3. Dispatcher signals notify Home Assistant entities
+4. Entities call `async_write_ha_state()` to update HA
+
+## Publishing Updates
+
+### Updating pyintellicenter
+
+When changes are made to the protocol library:
+
+1. Bump version in `pyintellicenter/pyproject.toml`
+2. Commit and push changes
+3. Create a GitHub release to trigger PyPI publish:
+   ```bash
+   cd ../pyintellicenter
+   gh release create v0.1.X --title "v0.1.X" --notes "Release notes"
+   ```
+4. Update requirement in `intellicenter/manifest.json`
+
+### Releasing intellicenter
+
+1. Update version in `manifest.json`
+2. Update `CHANGELOG.md`
+3. Create PR and merge to main
+4. Create GitHub release
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)

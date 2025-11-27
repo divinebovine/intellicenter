@@ -72,6 +72,7 @@ async def test_light_turn_on_basic(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning on a light without effects."""
     light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
@@ -86,12 +87,15 @@ async def test_light_turn_on_basic(
     assert args[0] == "LIGHT1"
     assert STATUS_ATTR in args[1]
     assert args[1][STATUS_ATTR] == "ON"
+    # Verify optimistic update was called
+    mock_write_ha_state.assert_called()
 
 
 async def test_light_turn_on_with_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning on a light with color effect."""
     light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)
@@ -114,6 +118,7 @@ async def test_light_turn_off(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test turning off a light."""
     # Set light to ON initially
@@ -335,6 +340,7 @@ async def test_light_turn_on_with_each_effect(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
     effect_name: str,
     expected_code: str,
 ) -> None:
@@ -401,6 +407,7 @@ async def test_light_invalid_effect_ignored(
     hass: HomeAssistant,
     pool_object_light: PoolObject,
     mock_coordinator: MagicMock,
+    mock_write_ha_state: MagicMock,
 ) -> None:
     """Test that invalid effect is ignored when turning on."""
     light = PoolLight(mock_coordinator, pool_object_light, LIGHT_EFFECTS)

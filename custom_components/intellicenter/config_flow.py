@@ -29,7 +29,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 from homeassistant.helpers.typing import ConfigType
-from pyintellicenter import ICBaseController, ICSystemInfo
+from pyintellicenter import ICBaseController, ICConnectionError, ICSystemInfo
 import voluptuous as vol
 
 # Import discovery - available in pyintellicenter 0.0.4+
@@ -43,13 +43,17 @@ except ImportError:
 from .const import (
     CONF_KEEPALIVE_INTERVAL,
     CONF_RECONNECT_DELAY,
+    CONF_TRANSPORT,
     DEFAULT_KEEPALIVE_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
+    DEFAULT_TRANSPORT,
     DOMAIN,
     MAX_KEEPALIVE_INTERVAL,
     MAX_RECONNECT_DELAY,
     MIN_KEEPALIVE_INTERVAL,
     MIN_RECONNECT_DELAY,
+    TRANSPORT_TCP,
+    TRANSPORT_WEBSOCKET,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,6 +100,7 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         self._discovered_host: str | None = None
         self._discovered_name: str | None = None
         self._discovered_units: list[ICUnit] = []
+        self._reconfigure_entry: ConfigEntry | None = None
 
     @staticmethod
     @callback
@@ -193,13 +198,15 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
 
         try:
             host = _validate_host(user_input[CONF_HOST])
-            system_info = await self._get_system_info(host)
+            transport = user_input.get(CONF_TRANSPORT, DEFAULT_TRANSPORT)
+            system_info = await self._get_system_info(host, transport)
 
             await self.async_set_unique_id(system_info.unique_id)
             self._abort_if_unique_id_configured()
 
             return self.async_create_entry(
-                title=system_info.prop_name, data={CONF_HOST: host}
+                title=system_info.prop_name,
+                data={CONF_HOST: host, CONF_TRANSPORT: transport},
             )
         except AbortFlow:
             raise
@@ -282,14 +289,10 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         self, errors: dict[str, str] | None = None
     ) -> FlowResult:
         """Show the form to pick setup method."""
-        options = [
-            {"value": SETUP_MANUAL, "label": "Enter IP address manually"},
-        ]
+        options = [SETUP_MANUAL]
 
         if DISCOVERY_AVAILABLE:
-            options.insert(
-                0, {"value": SETUP_DISCOVER, "label": "Discover devices on network"}
-            )
+            options.insert(0, SETUP_DISCOVER)
 
         return self.async_show_form(
             step_id="user",
@@ -302,6 +305,7 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                         SelectSelectorConfig(
                             options=options,
                             mode=SelectSelectorMode.LIST,
+                            translation_key="setup_method",
                         )
                     ),
                 }
@@ -350,7 +354,20 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         """Show the manual setup form."""
         return self.async_show_form(
             step_id="manual",
-            data_schema=vol.Schema({vol.Required(CONF_HOST): str}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST): str,
+                    vol.Required(
+                        CONF_TRANSPORT, default=DEFAULT_TRANSPORT
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[TRANSPORT_TCP, TRANSPORT_WEBSOCKET],
+                            mode=SelectSelectorMode.DROPDOWN,
+                            translation_key="transport",
+                        )
+                    ),
+                }
+            ),
             errors=errors or {},
         )
 
@@ -380,16 +397,34 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         except CannotConnect as err:
             raise CannotConnect from err
 
-    async def _get_system_info(self, host: str) -> ICSystemInfo:
-        """Attempt to connect and retrieve system information."""
-        controller = ICBaseController(host)
+    async def _get_system_info(
+        self, host: str, transport: str = DEFAULT_TRANSPORT
+    ) -> ICSystemInfo:
+        """Attempt to connect and retrieve system information.
+
+        Args:
+            host: IP address or hostname of IntelliCenter
+            transport: Transport type ("tcp" or "websocket")
+
+        Returns:
+            ICSystemInfo object with system details
+
+        Raises:
+            CannotConnect: If connection fails or system info unavailable
+        """
+        controller = ICBaseController(host, transport=transport)
 
         try:
             await controller.start()
             if controller.system_info is None:
                 raise CannotConnect("System info not available")
             return controller.system_info
-        except (ConnectionRefusedError, OSError, TimeoutError) as err:
+        except (
+            ConnectionRefusedError,
+            OSError,
+            TimeoutError,
+            ICConnectionError,
+        ) as err:
             raise CannotConnect from err
         finally:
             await controller.stop()
@@ -402,6 +437,73 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             if CONF_HOST in entry.data
         }
         return host in existing_hosts
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of the integration.
+
+        Allows users to change the host address and transport type after initial setup.
+        """
+        reconfigure_entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                host = _validate_host(user_input[CONF_HOST])
+                transport = user_input.get(CONF_TRANSPORT, DEFAULT_TRANSPORT)
+                system_info = await self._get_system_info(host, transport)
+
+                # Check if this host is different and not already configured
+                if host != reconfigure_entry.data.get(CONF_HOST):
+                    # Check if another entry uses this host
+                    for entry in self._async_current_entries():
+                        if (
+                            entry.entry_id != reconfigure_entry.entry_id
+                            and entry.data.get(CONF_HOST) == host
+                        ):
+                            return self.async_abort(reason="already_configured")
+
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    title=system_info.prop_name,
+                    data={CONF_HOST: host, CONF_TRANSPORT: transport},
+                )
+            except InvalidHost:
+                errors["base"] = "invalid_host"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_HOST,
+                        default=reconfigure_entry.data.get(CONF_HOST, ""),
+                    ): str,
+                    vol.Required(
+                        CONF_TRANSPORT,
+                        default=reconfigure_entry.data.get(
+                            CONF_TRANSPORT, DEFAULT_TRANSPORT
+                        ),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[TRANSPORT_TCP, TRANSPORT_WEBSOCKET],
+                            mode=SelectSelectorMode.DROPDOWN,
+                            translation_key="transport",
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "name": reconfigure_entry.title,
+            },
+        )
 
 
 class OptionsFlowHandler(OptionsFlow):

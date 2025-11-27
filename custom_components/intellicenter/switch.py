@@ -30,6 +30,9 @@ from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Coordinator handles updates via push, so no parallel update limit needed
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

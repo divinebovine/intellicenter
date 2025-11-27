@@ -59,6 +59,9 @@ from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Coordinator handles updates via push, so no parallel update limit needed
+PARALLEL_UPDATES = 0
+
 # -------------------------------------------------------------------------------------
 
 

@@ -30,8 +30,10 @@ from pyintellicenter import (
 from .const import (
     CONF_KEEPALIVE_INTERVAL,
     CONF_RECONNECT_DELAY,
+    CONF_TRANSPORT,
     DEFAULT_KEEPALIVE_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
+    DEFAULT_TRANSPORT,
     DOMAIN,
 )
 from .coordinator import IntelliCenterCoordinator
@@ -74,6 +76,9 @@ async def async_setup_entry(
     )
     reconnect_delay = entry.options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
 
+    # Get transport type from entry data (defaults to TCP for backwards compatibility)
+    transport = entry.data.get(CONF_TRANSPORT, DEFAULT_TRANSPORT)
+
     # Create the coordinator
     coordinator = IntelliCenterCoordinator(
         hass,
@@ -81,6 +86,7 @@ async def async_setup_entry(
         host=entry.data[CONF_HOST],
         keepalive_interval=keepalive_interval,
         reconnect_delay=reconnect_delay,
+        transport=transport,
     )
 
     try:
@@ -363,9 +369,17 @@ class PoolEntity(CoordinatorEntity[IntelliCenterCoordinator], Entity):
             self.async_write_ha_state()
 
     def pentairTemperatureSettings(self) -> str:
-        """Return the temperature units from the Pentair system."""
+        """Return the native temperature unit from the Pentair system.
+
+        This returns the unit that raw temperature values from IntelliCenter
+        are expressed in. Home Assistant will automatically convert the display
+        to match the user's unit system preference (Settings > System > General).
+        """
         system_info = self.coordinator.system_info
-        if system_info and system_info.uses_metric:
+        if system_info is None:
+            return str(UnitOfTemperature.FAHRENHEIT)
+
+        if system_info.uses_metric:
             return str(UnitOfTemperature.CELSIUS)
         return str(UnitOfTemperature.FAHRENHEIT)
 
@@ -443,6 +457,7 @@ class OnOffControlMixin:
         self.async_write_ha_state()
         self.request_changes({self._attribute_key: self._pool_object.off_status})
 
+    @callback
     def _clear_optimistic_state(self) -> None:
         """Clear optimistic state when real update is received."""
         self._optimistic_state = None

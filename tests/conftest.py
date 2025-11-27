@@ -385,3 +385,17 @@ def mock_config_entry() -> MagicMock:
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock()
     return entry
+
+
+@pytest.fixture
+def mock_write_ha_state() -> Generator[MagicMock]:
+    """Mock async_write_ha_state to allow testing entities not added to HA.
+
+    Use this fixture when testing entity methods that call async_write_ha_state
+    (like async_turn_on/async_turn_off with optimistic updates) without
+    properly registering the entity with Home Assistant.
+    """
+    with patch(
+        "homeassistant.helpers.entity.Entity.async_write_ha_state"
+    ) as mock_write:
+        yield mock_write

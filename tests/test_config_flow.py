@@ -9,7 +9,11 @@ from homeassistant.data_entry_flow import FlowResultType
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.intellicenter.const import DOMAIN
+from custom_components.intellicenter.const import (
+    CONF_TRANSPORT,
+    DEFAULT_TRANSPORT,
+    DOMAIN,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -43,7 +47,10 @@ async def test_user_flow_success(
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["title"] == "Test Pool System"
-    assert result["data"] == {CONF_HOST: "192.168.1.100"}
+    assert result["data"] == {
+        CONF_HOST: "192.168.1.100",
+        CONF_TRANSPORT: DEFAULT_TRANSPORT,
+    }
 
 
 async def test_user_flow_cannot_connect(
@@ -256,6 +263,123 @@ async def test_zeroconf_flow_updates_existing_entry(
         DOMAIN,
         context={"source": config_entries.SOURCE_ZEROCONF},
         data=discovery_info,
+    )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+# -------------------------------------------------------------------------------------
+# Reconfigure flow tests
+# -------------------------------------------------------------------------------------
+
+
+async def test_reconfigure_flow_success(
+    hass: HomeAssistant, mock_controller: MagicMock
+) -> None:
+    """Test successful reconfigure flow."""
+    # Create an existing entry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.99"},
+        unique_id="test-unique-id-123",
+        title="Old Pool System",
+    )
+    entry.add_to_hass(hass)
+
+    # Start reconfigure flow
+    result = await entry.start_reconfigure_flow(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    # Enter new IP address
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: "192.168.1.100"},
+    )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    # Verify entry was updated
+    assert entry.data[CONF_HOST] == "192.168.1.100"
+    assert entry.title == "Test Pool System"
+
+
+async def test_reconfigure_flow_same_host(
+    hass: HomeAssistant, mock_controller: MagicMock
+) -> None:
+    """Test reconfigure flow with same host (no change)."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.100"},
+        unique_id="test-unique-id-123",
+        title="Test Pool System",
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: "192.168.1.100"},
+    )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+
+async def test_reconfigure_flow_cannot_connect(
+    hass: HomeAssistant, mock_controller: MagicMock
+) -> None:
+    """Test reconfigure flow when connection fails."""
+    mock_controller.start.side_effect = ConnectionRefusedError()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.99"},
+        unique_id="test-unique-id-123",
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: "192.168.1.100"},
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_reconfigure_flow_host_already_configured(
+    hass: HomeAssistant, mock_controller: MagicMock
+) -> None:
+    """Test reconfigure flow when new host is already configured by another entry."""
+    # Create two entries
+    entry1 = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.99"},
+        unique_id="unique-id-1",
+    )
+    entry1.add_to_hass(hass)
+
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.100"},
+        unique_id="unique-id-2",
+    )
+    entry2.add_to_hass(hass)
+
+    # Try to reconfigure entry1 to use entry2's host
+    result = await entry1.start_reconfigure_flow(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: "192.168.1.100"},
     )
 
     assert result["type"] == FlowResultType.ABORT

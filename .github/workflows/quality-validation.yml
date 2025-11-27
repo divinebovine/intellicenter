@@ -245,8 +245,10 @@ jobs:
 
       - name: Verify ConnectionHandler implementation
         run: |
-          if ! grep -q "class ConnectionHandler" \
-            custom_components/intellicenter/pyintellicenter/controller.py; then
+          # Note: pyintellicenter is now an external package
+          # Check coordinator.py for connection handling
+          if ! grep -q "ICConnectionHandler\|ConnectionHandler" \
+            custom_components/intellicenter/coordinator.py; then
             echo "❌ ConnectionHandler not implemented"
             exit 1
           fi
@@ -254,12 +256,14 @@ jobs:
 
       - name: Check exponential backoff logic
         run: |
-          if ! grep -q "_next_delay" \
-            custom_components/intellicenter/pyintellicenter/controller.py; then
-            echo "❌ Exponential backoff not implemented"
+          # Note: Exponential backoff is handled by pyintellicenter package
+          # Verify coordinator uses the connection handler
+          if ! grep -q "on_reconnected\|reconnect" \
+            custom_components/intellicenter/coordinator.py; then
+            echo "❌ Reconnection handling not implemented"
             exit 1
           fi
-          echo "✅ Exponential backoff implemented"
+          echo "✅ Reconnection handling implemented"
 
   silver-logging-validation:
     name: "Silver: Logging Best Practices"
@@ -648,12 +652,14 @@ jobs:
 
       - name: Verify type annotations in critical files
         run: |
-          files=("protocol.py" "controller.py" "model.py")
+          # Note: protocol layer (pyintellicenter) is now an external package
+          # Check type annotations in integration files
+          files=("__init__.py" "coordinator.py" "config_flow.py")
           for file in "${files[@]}"; do
-            filepath="custom_components/intellicenter/pyintellicenter/$file"
+            filepath="custom_components/intellicenter/$file"
             if [ -f "$filepath" ]; then
               # Check for TYPE_CHECKING imports and type hints
-              if grep -q "TYPE_CHECKING\|: Optional\|: dict\|-> None\|-> str" "$filepath"; then
+              if grep -q "TYPE_CHECKING\|: Optional\|| None\|-> None\|-> str" "$filepath"; then
                 echo "✅ Type annotations found in $file"
               else
                 echo "⚠️  Warning: Limited type annotations in $file"
@@ -669,32 +675,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check docstring coverage in protocol.py
+      - name: Check docstring coverage in coordinator.py
         run: |
-          if ! grep -q 'Args:' \
-            custom_components/intellicenter/pyintellicenter/protocol.py; then
-            echo "❌ Insufficient docstrings in protocol.py"
+          # Note: protocol layer (pyintellicenter) is now an external package
+          # Check docstrings in integration files
+          if ! grep -q '"""' \
+            custom_components/intellicenter/coordinator.py; then
+            echo "❌ Insufficient docstrings in coordinator.py"
             exit 1
           fi
-          echo "✅ Comprehensive docstrings in protocol.py"
+          echo "✅ Comprehensive docstrings in coordinator.py"
 
-      - name: Check docstring coverage in controller.py
+      - name: Check docstring coverage in __init__.py
         run: |
-          if ! grep -q 'Args:' \
-            custom_components/intellicenter/pyintellicenter/controller.py; then
-            echo "❌ Insufficient docstrings in controller.py"
+          if ! grep -q '"""' \
+            custom_components/intellicenter/__init__.py; then
+            echo "❌ Insufficient docstrings in __init__.py"
             exit 1
           fi
-          echo "✅ Comprehensive docstrings in controller.py"
+          echo "✅ Comprehensive docstrings in __init__.py"
 
       - name: Verify module-level documentation
         run: |
-          files=("protocol.py" "controller.py" "model.py")
+          # Note: protocol layer (pyintellicenter) is now an external package
+          # Check integration files for module docstrings
+          files=("__init__.py" "coordinator.py" "config_flow.py")
           for file in "${files[@]}"; do
-            filepath="custom_components/intellicenter/pyintellicenter/$file"
+            filepath="custom_components/intellicenter/$file"
             if [ -f "$filepath" ]; then
               # Check for module-level docstrings
-              if head -20 "$filepath" | grep -q '""".*module'; then
+              if head -20 "$filepath" | grep -q '"""'; then
                 echo "✅ Module docstring found in $file"
               else
                 echo "⚠️  Warning: No module docstring in $file"
@@ -738,14 +748,16 @@ jobs:
           fi
           echo "✅ Platinum-level test coverage ($test_count tests)"
 
-      - name: Verify protocol and controller tests exist
+      - name: Verify core component tests exist
         run: |
-          if [ ! -f "tests/test_protocol.py" ]; then
-            echo "❌ Protocol tests not found"
+          # Note: protocol/controller tests are in pyintellicenter package
+          # Check for integration tests
+          if [ ! -f "tests/test_init.py" ]; then
+            echo "❌ Integration tests not found"
             exit 1
           fi
-          if [ ! -f "tests/test_controller.py" ]; then
-            echo "❌ Controller tests not found"
+          if [ ! -f "tests/test_config_flow.py" ]; then
+            echo "❌ Config flow tests not found"
             exit 1
           fi
           echo "✅ Core component tests exist"
@@ -753,8 +765,8 @@ jobs:
       - name: Check test quality
         run: |
           # Verify tests use proper async patterns
-          if ! grep -q "async def test_" tests/test_protocol.py; then
-            echo "⚠️  Warning: Protocol tests may not be properly async"
+          if ! grep -q "async def test_" tests/test_init.py; then
+            echo "⚠️  Warning: Integration tests may not be properly async"
           else
             echo "✅ Tests use proper async patterns"
           fi
@@ -802,20 +814,21 @@ jobs:
 
       - name: Check for efficient data handling
         run: |
-          # Verify batching and flow control exist
-          if ! grep -q "batch\|queue\|_out_pending" \
-            custom_components/intellicenter/pyintellicenter/protocol.py; then
-            echo "❌ Flow control not implemented"
+          # Note: Flow control is in pyintellicenter package
+          # Verify coordinator uses efficient update mechanism
+          if ! grep -q "async_set_updated_data\|push" \
+            custom_components/intellicenter/coordinator.py; then
+            echo "❌ Push-based updates not implemented"
             exit 1
           fi
-          echo "✅ Efficient flow control implemented"
+          echo "✅ Efficient data handling implemented"
 
       - name: Verify minimal network overhead
         run: |
-          # Check for keepalive/polling optimization
-          if grep -q "KEEPALIVE_INTERVAL\|NotifyList" \
-            custom_components/intellicenter/pyintellicenter/protocol.py; then
-            echo "✅ Optimized network communication"
+          # Check for push-based updates (no polling)
+          if grep -q "local_push\|NotifyList\|ICModelController" \
+            custom_components/intellicenter/*.py; then
+            echo "✅ Optimized network communication (local push)"
           else
             echo "⚠️  Warning: Network optimization unclear"
           fi

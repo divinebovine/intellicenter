@@ -39,6 +39,9 @@ from .coordinator import IntelliCenterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Coordinator handles updates via push, so no parallel update limit needed
+PARALLEL_UPDATES = 0
+
 # IntelliChem setpoint ranges (per Pentair documentation)
 PH_SETPOINT_MIN = 7.0
 PH_SETPOINT_MAX = 7.6
