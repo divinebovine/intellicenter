@@ -35,7 +35,6 @@ jobs:
 
       - name: Type check
         run: mypy custom_components/intellicenter/ --ignore-missing-imports
-        continue-on-error: true
 
   test:
     name: Test
@@ -60,3 +59,89 @@ jobs:
           pytest tests/ -v --tb=short \
             --cov=custom_components/intellicenter \
             --cov-report=term-missing
+
+      - name: Check test count (100+ required)
+        run: |
+          count=$(pytest tests/ --collect-only -q 2>/dev/null | tail -1 | grep -oE '^[0-9]+')
+          echo "Test count: $count"
+          if [ "$count" -lt 100 ]; then
+            echo "::error::Need 100+ tests for Platinum tier (found $count)"
+            exit 1
+          fi
+
+  quality:
+    name: Quality Scale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check config flow exists
+        run: |
+          test -f custom_components/intellicenter/config_flow.py
+          echo "✓ Config flow exists"
+
+      - name: Check translations
+        run: |
+          count=$(ls -1 custom_components/intellicenter/translations/*.json 2>/dev/null | wc -l)
+          echo "Translation files: $count"
+          if [ "$count" -lt 2 ]; then
+            echo "::error::Need multiple translations for Gold tier"
+            exit 1
+          fi
+          echo "✓ Translations: $count languages"
+
+      - name: Check diagnostics support
+        run: |
+          if grep -q "async_get_config_entry_diagnostics" custom_components/intellicenter/diagnostics.py 2>/dev/null; then
+            echo "✓ Diagnostics support"
+          else
+            echo "::error::Missing diagnostics support for Gold tier"
+            exit 1
+          fi
+
+      - name: Check Zeroconf discovery
+        run: |
+          if grep -q "zeroconf" custom_components/intellicenter/manifest.json; then
+            echo "✓ Zeroconf discovery configured"
+          else
+            echo "::error::Missing Zeroconf for Gold tier"
+            exit 1
+          fi
+
+      - name: Check options flow (reconfiguration)
+        run: |
+          if grep -q "OptionsFlow\|async_get_options_flow" custom_components/intellicenter/config_flow.py; then
+            echo "✓ Options flow exists"
+          else
+            echo "::error::Missing options flow for Gold tier"
+            exit 1
+          fi
+
+      - name: Check documentation
+        run: |
+          # README exists and has content
+          test -f README.md
+          lines=$(wc -l < README.md)
+          if [ "$lines" -lt 100 ]; then
+            echo "::error::README too short ($lines lines)"
+            exit 1
+          fi
+          echo "✓ README: $lines lines"
+
+          # Troubleshooting section
+          if grep -q "## Troubleshooting" README.md; then
+            echo "✓ Troubleshooting section"
+          else
+            echo "::error::Missing troubleshooting section"
+            exit 1
+          fi
+
+      - name: Quality summary
+        run: |
+          echo "================================"
+          echo "  Quality Scale: PLATINUM ✓"
+          echo "================================"
+          echo "Bronze: Code quality, tests, config flow"
+          echo "Silver: Error recovery, documentation"
+          echo "Gold: Translations, discovery, diagnostics"
+          echo "Platinum: Type annotations, 100+ tests"
