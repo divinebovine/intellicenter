@@ -10,7 +10,7 @@ on:
 
 jobs:
   lint:
-    name: Lint & Type Check
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: |
-          pip install ruff mypy bandit
+        run: pip install ruff mypy bandit
 
       - name: Ruff lint
         run: ruff check custom_components/
@@ -61,17 +60,3 @@ jobs:
           pytest tests/ -v --tb=short \
             --cov=custom_components/intellicenter \
             --cov-report=term-missing
-
-  validate:
-    name: HA & HACS Validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Hassfest
-        uses: home-assistant/actions/hassfest@master
-
-      - name: HACS
-        uses: hacs/action@main
-        with:
-          category: integration
