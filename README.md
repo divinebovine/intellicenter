@@ -20,7 +20,7 @@ This integration connects your Pentair IntelliCenter pool control system to Home
 
 ## Features
 
-- **Local Connection**: Direct TCP communication on port 6681 - no cloud required
+- **Local Connection**: Direct TCP communication on port 6681 - no cloud required, no authentication required
 - **Automatic Discovery**: Zeroconf/mDNS discovers your IntelliCenter automatically
 - **Real-time Updates**: Push-based notifications for instant state changes
 - **Reliable Connection**: Automatic reconnection with exponential backoff and circuit breaker
@@ -179,27 +179,90 @@ automation:
 
 ### Integration Not Discovered
 
-1. Ensure Home Assistant and IntelliCenter are on the same network/VLAN
-2. Check that mDNS/multicast traffic isn't blocked by your router
-3. Try manual setup with the IP address
+If your IntelliCenter is not automatically discovered:
+
+1. **Verify network connectivity**
+   - Home Assistant and IntelliCenter must be on the same network/VLAN
+   - Check that mDNS/multicast traffic is not blocked by your router or firewall
+   - Some managed switches block multicast by default
+
+2. **Check IntelliCenter network settings**
+   - Verify the IntelliCenter has a valid IP address
+   - Ensure the network cable is securely connected
+   - Check the IntelliCenter display for network status
+
+3. **Use manual setup**
+   - Go to **Settings** → **Devices & Services** → **Add Integration**
+   - Search for "Pentair IntelliCenter"
+   - Enter the IP address manually
 
 ### Connection Failed
 
-1. Verify the IP address is correct
-2. Test connectivity: `telnet <ip> 6681`
-3. Check IntelliCenter is powered on and network cable connected
-4. Try power cycling the IntelliCenter
+If the integration fails to connect:
+
+1. **Verify the IP address**
+   - Confirm the IP address is correct in your router's DHCP client list
+   - Check the Pentair mobile app under Settings → System Information
+
+2. **Test network connectivity**
+   ```bash
+   telnet <intellicenter-ip> 6681
+   ```
+   - If connection fails, check firewall rules
+   - Verify no other device is using port 6681
+
+3. **Check IntelliCenter status**
+   - Ensure the IntelliCenter is powered on
+   - Verify the network cable is connected
+   - Check for any error indicators on the panel
+
+4. **Power cycle the IntelliCenter**
+   - Turn off power to the IntelliCenter for 30 seconds
+   - Turn power back on and wait for it to fully boot
+   - Retry the connection
 
 ### Entities Unavailable
 
-1. Check connection status in **Settings** → **Devices & Services**
-2. Review logs: **Settings** → **System** → **Logs**
-3. Try reloading: **IntelliCenter** → **⋮** → **Reload**
-4. The integration auto-reconnects with exponential backoff
+If entities show as unavailable after initial setup:
+
+1. **Check connection status**
+   - Go to **Settings** → **Devices & Services**
+   - Look for the IntelliCenter integration status
+   - A red indicator means the connection is down
+
+2. **Review Home Assistant logs**
+   - Go to **Settings** → **System** → **Logs**
+   - Filter for "intellicenter" to see relevant messages
+   - Look for connection errors or timeouts
+
+3. **Reload the integration**
+   - Go to **Settings** → **Devices & Services**
+   - Click the three dots (⋮) next to IntelliCenter
+   - Select **Reload**
+
+4. **Automatic recovery**
+   - The integration automatically reconnects with exponential backoff
+   - Wait a few minutes for automatic recovery
+   - Check the circuit breaker hasn't opened (5 consecutive failures)
+
+### Incorrect Values or Missing Entities
+
+1. **Reload after configuration changes**
+   - After changing pool equipment in IntelliCenter, reload the integration
+   - New equipment may not appear until reload
+
+2. **Unit mismatch**
+   - If you change metric/imperial units on IntelliCenter, reload the integration
+   - Temperature values may be incorrect until reload
+
+3. **Equipment not supported**
+   - Some equipment types may have limited support
+   - Check the Supported Equipment section above
+   - Open an issue on GitHub for unsupported equipment
 
 ### Enable Debug Logging
 
-Add to `configuration.yaml`:
+For detailed troubleshooting, enable debug logging by adding to `configuration.yaml`:
 
 ```yaml
 logger:
@@ -208,6 +271,20 @@ logger:
     custom_components.intellicenter: debug
     pyintellicenter: debug
 ```
+
+After adding this configuration:
+1. Restart Home Assistant
+2. Reproduce the issue
+3. Check logs at **Settings** → **System** → **Logs**
+4. Download full logs for bug reports
+
+### Getting Help
+
+If you're still having issues:
+
+1. **Check existing issues**: [GitHub Issues](https://github.com/joyfulhouse/intellicenter/issues)
+2. **Open a new issue**: Include debug logs and your IntelliCenter model
+3. **Community support**: [GitHub Discussions](https://github.com/joyfulhouse/intellicenter/discussions)
 
 ## Known Limitations
 
