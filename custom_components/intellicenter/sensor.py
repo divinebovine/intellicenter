@@ -321,7 +321,7 @@ async def async_setup_entry(
                         )
                     )
         elif obj.objtype == SYSTEM_TYPE:
-            # Firmware version (diagnostic sensor)
+            # Firmware version (diagnostic sensor, non-numeric string value)
             if VER_ATTR in obj.attribute_keys:
                 sensors.append(
                     PoolSensor(
@@ -332,6 +332,7 @@ async def async_setup_entry(
                         name="Firmware Version",
                         icon="mdi:chip",
                         entity_category=EntityCategory.DIAGNOSTIC,
+                        state_class=None,  # Non-numeric value
                     )
                 )
     async_add_entities(sensors)
@@ -354,6 +355,7 @@ class PoolSensor(PoolEntity, SensorEntity):
         device_class: SensorDeviceClass | None,
         rounding_factor: int = 0,
         entity_category: EntityCategory | None = None,
+        state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT,
         **kwargs: Any,
     ) -> None:
         """Initialize a pool sensor.
@@ -364,12 +366,14 @@ class PoolSensor(PoolEntity, SensorEntity):
             device_class: The device class for this sensor
             rounding_factor: If non-zero, round values to this factor
             entity_category: The entity category (e.g., DIAGNOSTIC)
+            state_class: The state class (default: MEASUREMENT, None for non-numeric)
             **kwargs: Additional arguments passed to PoolEntity
         """
         super().__init__(coordinator, pool_object, **kwargs)
         self._attr_device_class = device_class
         self._rounding_factor = rounding_factor
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        if state_class is not None:
+            self._attr_state_class = state_class
         if entity_category:
             self._attr_entity_category = entity_category
 
