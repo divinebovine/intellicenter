@@ -20,12 +20,26 @@ This integration connects your Pentair IntelliCenter pool control system to Home
 
 ## Features
 
-- **Local Connection**: Direct TCP communication on port 6681 - no cloud required, no authentication required
+- **Local Connection**: Direct communication on port 6681 - no cloud required, no authentication needed
+- **Flexible Transport**: Choose between TCP or WebSocket connections based on your network setup
 - **Automatic Discovery**: Zeroconf/mDNS discovers your IntelliCenter automatically
 - **Real-time Updates**: Push-based notifications for instant state changes
 - **Reliable Connection**: Automatic reconnection with exponential backoff and circuit breaker
+- **Highly Responsive**: Optimized async architecture with intelligent request queuing
 - **Comprehensive Support**: Pools, spas, lights, pumps, heaters, chemistry, schedules, covers
 - **Multi-Language**: User interface available in 12 languages
+- **Easy Reconfiguration**: Change connection settings without removing the integration
+
+## What's New in v3.5
+
+This release brings significant performance and usability improvements:
+
+- **Transport Selection**: Choose between TCP (default) or WebSocket connections during setup or reconfiguration - useful for networks where one protocol works better than the other
+- **Reconfiguration Support**: Change your IntelliCenter's IP address or transport type through the UI without removing and re-adding the integration
+- **Modernized Codebase**: Updated to use current asyncio patterns, removing all deprecated function calls for better compatibility with Python 3.13+
+- **Request Queue Optimization**: Intelligent request queuing prevents overwhelming the IntelliCenter, resulting in faster and more reliable command execution
+- **Improved Responsiveness**: Optimized async operations throughout the integration for snappier control response times
+- **Protocol Library Extraction**: Core protocol handling extracted to standalone [pyintellicenter](https://github.com/joyfulhouse/pyintellicenter) library for better maintainability
 
 ## Architecture
 
@@ -88,6 +102,7 @@ If discovery doesn't work:
 2. Click **Add Integration** (bottom right)
 3. Search for "Pentair IntelliCenter"
 4. Enter your IntelliCenter's IP address
+5. Select transport type (TCP recommended, WebSocket available as alternative)
 
 **Finding your IP address:**
 - Router's DHCP client list (look for "Pentair")
@@ -95,6 +110,16 @@ If discovery doesn't work:
 - IntelliCenter display panel
 
 > **Tip:** Assign a static IP or DHCP reservation to prevent address changes.
+
+### Reconfiguration
+
+To change the IP address or transport type after setup:
+
+1. Navigate to **Settings** → **Devices & Services**
+2. Find the IntelliCenter integration
+3. Click the three dots (⋮) → **Reconfigure**
+4. Update the IP address and/or transport type
+5. The integration will reconnect with the new settings
 
 ### Advanced Options
 
@@ -360,8 +385,8 @@ We extend our sincere gratitude for their foundational work that made this integ
 [license-shield]: https://img.shields.io/github/license/joyfulhouse/intellicenter?style=for-the-badge
 [hacs]: https://hacs.xyz
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
-[ci-badge]: https://img.shields.io/github/actions/workflow/status/joyfulhouse/intellicenter/quality-validation.yml?branch=main&label=CI&style=for-the-badge
-[ci-workflow]: https://github.com/joyfulhouse/intellicenter/actions/workflows/quality-validation.yml
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/joyfulhouse/intellicenter/ci.yml?branch=main&label=CI&style=for-the-badge
+[ci-workflow]: https://github.com/joyfulhouse/intellicenter/actions/workflows/ci.yml
 [quality-badge]: https://img.shields.io/badge/quality_scale-platinum-e5e4e2?style=for-the-badge
 [quality-scale]: https://www.home-assistant.io/docs/quality_scale/
 [maintenance-shield]: https://img.shields.io/badge/maintainer-joyfulhouse-blue.svg?style=for-the-badge
