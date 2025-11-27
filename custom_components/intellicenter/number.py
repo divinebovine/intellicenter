@@ -120,7 +120,7 @@ async def async_setup_entry(
                             step=ORP_SETPOINT_STEP,
                             attribute_key=ORPSET_ATTR,
                             name="+ ORP Setpoint",
-                            icon="mdi:flash",
+                            icon="mdi:test-tube",
                             unit_of_measurement="mV",
                             mode=NumberMode.SLIDER,
                         )

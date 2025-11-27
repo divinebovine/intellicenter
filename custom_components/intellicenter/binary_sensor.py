@@ -64,6 +64,7 @@ async def async_setup_entry(
                     obj,
                     icon="mdi:snowflake",
                     device_class=BinarySensorDeviceClass.COLD,
+                    entity_category=EntityCategory.DIAGNOSTIC,
                 )
             )
         elif obj.objtype == HEATER_TYPE:
@@ -198,6 +199,7 @@ class HeaterBinarySensor(PoolEntity, BinarySensorEntity):
     """
 
     _attr_device_class = BinarySensorDeviceClass.HEAT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:fire-circle"
 
     def __init__(

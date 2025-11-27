@@ -20,7 +20,6 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     CONCENTRATION_PARTS_PER_MILLION,
     UnitOfPower,
-    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -30,7 +29,6 @@ from pyintellicenter import (
     BODY_TYPE,
     CALC_ATTR,
     CHEM_TYPE,
-    CIRCUIT_TYPE,
     CYACID_ATTR,
     GPM_ATTR,
     LOTMP_ATTR,
@@ -51,7 +49,6 @@ from pyintellicenter import (
     SENSE_TYPE,
     SOURCE_ATTR,
     SYSTEM_TYPE,
-    TIME_ATTR,
     VER_ATTR,
     PoolObject,
 )
@@ -301,23 +298,6 @@ async def async_setup_entry(
                             unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
                             attribute_key=SALT_ATTR,
                             name="+ (Salt)",
-                        )
-                    )
-        elif obj.objtype == CIRCUIT_TYPE:
-            # Egg timer duration sensor (in minutes)
-            if TIME_ATTR in obj.attribute_keys and obj[TIME_ATTR]:
-                time_val = obj[TIME_ATTR]
-                # Only create sensor if timer is set (non-zero)
-                if time_val and int(time_val) > 0:
-                    sensors.append(
-                        PoolSensor(
-                            coordinator,
-                            obj,
-                            device_class=SensorDeviceClass.DURATION,
-                            unit_of_measurement=UnitOfTime.MINUTES,
-                            attribute_key=TIME_ATTR,
-                            name="+ Egg Timer",
-                            icon="mdi:timer-outline",
                         )
                     )
         elif obj.objtype == SYSTEM_TYPE:
