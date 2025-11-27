@@ -5,6 +5,7 @@ This module provides binary sensor entities for:
 - Heater status
 - Schedule status
 - Pump status
+- IntelliChem alarm indicators (diagnostic)
 """
 
 from __future__ import annotations
@@ -16,14 +17,20 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyintellicenter import (
     BODY_ATTR,
+    CHEM_TYPE,
     CIRCUIT_TYPE,
     HEATER_ATTR,
     HEATER_TYPE,
     HTMODE_ATTR,
+    ORPHI_ATTR,
+    ORPLO_ATTR,
+    PHHI_ATTR,
+    PHLO_ATTR,
     PUMP_STATUS_ON,
     PUMP_TYPE,
     SCHED_TYPE,
@@ -86,6 +93,56 @@ async def async_setup_entry(
                     device_class=BinarySensorDeviceClass.RUNNING,
                 )
             )
+        elif obj.objtype == CHEM_TYPE and obj.subtype == "ICHEM":
+            # IntelliChem alarm indicators (diagnostic entities)
+            if PHHI_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolBinarySensor(
+                        coordinator,
+                        obj,
+                        attribute_key=PHHI_ATTR,
+                        name="+ (pH High Alarm)",
+                        icon="mdi:alert-circle",
+                        device_class=BinarySensorDeviceClass.PROBLEM,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if PHLO_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolBinarySensor(
+                        coordinator,
+                        obj,
+                        attribute_key=PHLO_ATTR,
+                        name="+ (pH Low Alarm)",
+                        icon="mdi:alert-circle",
+                        device_class=BinarySensorDeviceClass.PROBLEM,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if ORPHI_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolBinarySensor(
+                        coordinator,
+                        obj,
+                        attribute_key=ORPHI_ATTR,
+                        name="+ (ORP High Alarm)",
+                        icon="mdi:alert-circle",
+                        device_class=BinarySensorDeviceClass.PROBLEM,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if ORPLO_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolBinarySensor(
+                        coordinator,
+                        obj,
+                        attribute_key=ORPLO_ATTR,
+                        name="+ (ORP Low Alarm)",
+                        icon="mdi:alert-circle",
+                        device_class=BinarySensorDeviceClass.PROBLEM,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
     async_add_entities(sensors)
 
 
@@ -95,7 +152,8 @@ async def async_setup_entry(
 class PoolBinarySensor(PoolEntity, BinarySensorEntity):
     """Representation of a Pentair Binary Sensor.
 
-    Used for freeze protection, schedule status, and pump running status.
+    Used for freeze protection, schedule status, pump running status,
+    and IntelliChem alarm indicators.
     """
 
     def __init__(
@@ -104,6 +162,7 @@ class PoolBinarySensor(PoolEntity, BinarySensorEntity):
         pool_object: PoolObject,
         value_for_on: str = STATUS_ON,
         device_class: BinarySensorDeviceClass | None = None,
+        entity_category: EntityCategory | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a pool binary sensor.
@@ -113,12 +172,15 @@ class PoolBinarySensor(PoolEntity, BinarySensorEntity):
             pool_object: The PoolObject this sensor represents
             value_for_on: The attribute value that indicates "on" state
             device_class: The device class for this sensor
+            entity_category: The entity category (e.g., DIAGNOSTIC)
             **kwargs: Additional arguments passed to PoolEntity
         """
         super().__init__(coordinator, pool_object, **kwargs)
         self._value_for_on = value_for_on
         if device_class:
             self._attr_device_class = device_class
+        if entity_category:
+            self._attr_entity_category = entity_category
 
     @property
     def is_on(self) -> bool:

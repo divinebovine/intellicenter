@@ -4,6 +4,7 @@ This module provides sensor entities for various pool measurements including:
 - Temperature sensors (air, water)
 - Pump sensors (power, RPM, GPM)
 - Chemistry sensors (pH, ORP, salt level, water quality)
+- IntelliChem water chemistry settings (alkalinity, calcium hardness, cyanuric acid)
 """
 
 from __future__ import annotations
@@ -16,15 +17,28 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION, UnitOfPower
+from homeassistant.const import (
+    CONCENTRATION_PARTS_PER_MILLION,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyintellicenter import (
+    ALK_ATTR,
     BODY_TYPE,
+    CALC_ATTR,
     CHEM_TYPE,
+    CIRCUIT_TYPE,
+    CYACID_ATTR,
     GPM_ATTR,
     LOTMP_ATTR,
     LSTTMP_ATTR,
+    MAX_ATTR,
+    MAXF_ATTR,
+    MIN_ATTR,
+    MINF_ATTR,
     ORPTNK_ATTR,
     ORPVAL_ATTR,
     PHTNK_ATTR,
@@ -36,6 +50,9 @@ from pyintellicenter import (
     SALT_ATTR,
     SENSE_TYPE,
     SOURCE_ATTR,
+    SYSTEM_TYPE,
+    TIME_ATTR,
+    VER_ATTR,
     PoolObject,
 )
 
@@ -104,6 +121,67 @@ async def async_setup_entry(
                         name="+ gpm",
                     )
                 )
+            # Pump operational limits (diagnostic sensors)
+            if MAX_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolSensor(
+                        coordinator,
+                        obj,
+                        device_class=None,
+                        unit_of_measurement=CONST_RPM,
+                        attribute_key=MAX_ATTR,
+                        name="+ Max RPM",
+                        icon="mdi:speedometer",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if MIN_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolSensor(
+                        coordinator,
+                        obj,
+                        device_class=None,
+                        unit_of_measurement=CONST_RPM,
+                        attribute_key=MIN_ATTR,
+                        name="+ Min RPM",
+                        icon="mdi:speedometer-slow",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if (
+                MAXF_ATTR in obj.attribute_keys
+                and obj[MAXF_ATTR]
+                and int(obj[MAXF_ATTR]) > 0
+            ):
+                sensors.append(
+                    PoolSensor(
+                        coordinator,
+                        obj,
+                        device_class=None,
+                        unit_of_measurement=CONST_GPM,
+                        attribute_key=MAXF_ATTR,
+                        name="+ Max GPM",
+                        icon="mdi:water-pump",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
+            if (
+                MINF_ATTR in obj.attribute_keys
+                and obj[MINF_ATTR]
+                and int(obj[MINF_ATTR]) > 0
+            ):
+                sensors.append(
+                    PoolSensor(
+                        coordinator,
+                        obj,
+                        device_class=None,
+                        unit_of_measurement=CONST_GPM,
+                        attribute_key=MINF_ATTR,
+                        name="+ Min GPM",
+                        icon="mdi:water-pump-off",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
         elif obj.objtype == BODY_TYPE:
             sensors.append(
                 PoolSensor(
@@ -143,6 +221,7 @@ async def async_setup_entry(
                             device_class=None,
                             attribute_key=ORPVAL_ATTR,
                             name="+ (ORP)",
+                            unit_of_measurement="mV",
                         )
                     )
                 if QUALTY_ATTR in obj.attribute_keys:
@@ -162,7 +241,7 @@ async def async_setup_entry(
                             obj,
                             device_class=None,
                             attribute_key=PHTNK_ATTR,
-                            name="+ (Ph Tank Level)",
+                            name="+ (pH Tank Level)",
                         )
                     )
                 if ORPTNK_ATTR in obj.attribute_keys:
@@ -173,6 +252,43 @@ async def async_setup_entry(
                             device_class=None,
                             attribute_key=ORPTNK_ATTR,
                             name="+ (ORP Tank Level)",
+                        )
+                    )
+                # Water chemistry configuration sensors (read-only)
+                if ALK_ATTR in obj.attribute_keys:
+                    sensors.append(
+                        PoolSensor(
+                            coordinator,
+                            obj,
+                            device_class=None,
+                            attribute_key=ALK_ATTR,
+                            name="+ (Alkalinity)",
+                            unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+                            icon="mdi:flask-outline",
+                        )
+                    )
+                if CALC_ATTR in obj.attribute_keys:
+                    sensors.append(
+                        PoolSensor(
+                            coordinator,
+                            obj,
+                            device_class=None,
+                            attribute_key=CALC_ATTR,
+                            name="+ (Calcium Hardness)",
+                            unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+                            icon="mdi:flask-outline",
+                        )
+                    )
+                if CYACID_ATTR in obj.attribute_keys:
+                    sensors.append(
+                        PoolSensor(
+                            coordinator,
+                            obj,
+                            device_class=None,
+                            attribute_key=CYACID_ATTR,
+                            name="+ (Cyanuric Acid)",
+                            unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+                            icon="mdi:flask-outline",
                         )
                     )
             elif obj.subtype == "ICHLOR":
@@ -187,6 +303,37 @@ async def async_setup_entry(
                             name="+ (Salt)",
                         )
                     )
+        elif obj.objtype == CIRCUIT_TYPE:
+            # Egg timer duration sensor (in minutes)
+            if TIME_ATTR in obj.attribute_keys and obj[TIME_ATTR]:
+                time_val = obj[TIME_ATTR]
+                # Only create sensor if timer is set (non-zero)
+                if time_val and int(time_val) > 0:
+                    sensors.append(
+                        PoolSensor(
+                            coordinator,
+                            obj,
+                            device_class=SensorDeviceClass.DURATION,
+                            unit_of_measurement=UnitOfTime.MINUTES,
+                            attribute_key=TIME_ATTR,
+                            name="+ Egg Timer",
+                            icon="mdi:timer-outline",
+                        )
+                    )
+        elif obj.objtype == SYSTEM_TYPE:
+            # Firmware version (diagnostic sensor)
+            if VER_ATTR in obj.attribute_keys:
+                sensors.append(
+                    PoolSensor(
+                        coordinator,
+                        obj,
+                        device_class=None,
+                        attribute_key=VER_ATTR,
+                        name="Firmware Version",
+                        icon="mdi:chip",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                    )
+                )
     async_add_entities(sensors)
 
 
@@ -206,6 +353,7 @@ class PoolSensor(PoolEntity, SensorEntity):
         pool_object: PoolObject,
         device_class: SensorDeviceClass | None,
         rounding_factor: int = 0,
+        entity_category: EntityCategory | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a pool sensor.
@@ -215,12 +363,15 @@ class PoolSensor(PoolEntity, SensorEntity):
             pool_object: The PoolObject this sensor represents
             device_class: The device class for this sensor
             rounding_factor: If non-zero, round values to this factor
+            entity_category: The entity category (e.g., DIAGNOSTIC)
             **kwargs: Additional arguments passed to PoolEntity
         """
         super().__init__(coordinator, pool_object, **kwargs)
         self._attr_device_class = device_class
         self._rounding_factor = rounding_factor
         self._attr_state_class = SensorStateClass.MEASUREMENT
+        if entity_category:
+            self._attr_entity_category = entity_category
 
     @property
     def native_value(self) -> float | int | str | None:

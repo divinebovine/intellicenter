@@ -18,23 +18,38 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from pyintellicenter import (
     # Attribute constants for tracking
     ACT_ATTR,
+    ALK_ATTR,
     BODY_ATTR,
     BODY_TYPE,
+    CALC_ATTR,
     CHEM_TYPE,
     CIRCGRP_TYPE,
     CIRCUIT_ATTR,
     CIRCUIT_TYPE,
+    CYACID_ATTR,
     FEATR_ATTR,
+    FREEZE_ATTR,
     GPM_ATTR,
     HEATER_ATTR,
     HEATER_TYPE,
+    HITMP_ATTR,
     HTMODE_ATTR,
     LISTORD_ATTR,
     LOTMP_ATTR,
     LSTTMP_ATTR,
+    MAX_ATTR,
+    MAXF_ATTR,
+    MIN_ATTR,
+    MINF_ATTR,
     MODE_ATTR,
+    ORPHI_ATTR,
+    ORPLO_ATTR,
+    ORPSET_ATTR,
     ORPTNK_ATTR,
     ORPVAL_ATTR,
+    PHHI_ATTR,
+    PHLO_ATTR,
+    PHSET_ATTR,
     PHTNK_ATTR,
     PHVAL_ATTR,
     PRIM_ATTR,
@@ -52,8 +67,10 @@ from pyintellicenter import (
     SUBTYP_ATTR,
     SUPER_ATTR,
     SYSTEM_TYPE,
+    TIME_ATTR,
     USE_ATTR,
     VACFLO_ATTR,
+    VER_ATTR,
     VOL_ATTR,
     ICBaseController,
     ICConnectionHandler,
@@ -71,13 +88,22 @@ DEFAULT_ATTRIBUTES_MAP: dict[str, set[str]] = {
     BODY_TYPE: {
         SNAME_ATTR,
         HEATER_ATTR,
+        HITMP_ATTR,  # Max temperature setpoint
         HTMODE_ATTR,
         LOTMP_ATTR,
         LSTTMP_ATTR,
         STATUS_ATTR,
         VOL_ATTR,
     },
-    CIRCUIT_TYPE: {SNAME_ATTR, STATUS_ATTR, USE_ATTR, SUBTYP_ATTR, FEATR_ATTR},
+    CIRCUIT_TYPE: {
+        SNAME_ATTR,
+        STATUS_ATTR,
+        USE_ATTR,
+        SUBTYP_ATTR,
+        FEATR_ATTR,
+        TIME_ATTR,  # Egg timer duration
+        FREEZE_ATTR,  # Freeze protection status
+    },
     CIRCGRP_TYPE: {CIRCUIT_ATTR},
     CHEM_TYPE: {
         SNAME_ATTR,
@@ -86,20 +112,43 @@ DEFAULT_ATTRIBUTES_MAP: dict[str, set[str]] = {
         SEC_ATTR,
         SUPER_ATTR,
         SUBTYP_ATTR,
-        # IntelliChem sensors
+        # IntelliChem sensors (read-only)
         PHVAL_ATTR,
         ORPVAL_ATTR,
         PHTNK_ATTR,
         ORPTNK_ATTR,
         QUALTY_ATTR,
+        # IntelliChem setpoints (controllable)
+        PHSET_ATTR,
+        ORPSET_ATTR,
+        # IntelliChem water chemistry settings (read-only)
+        ALK_ATTR,
+        CALC_ATTR,
+        CYACID_ATTR,
+        # IntelliChem alarm indicators (diagnostic)
+        PHHI_ATTR,
+        PHLO_ATTR,
+        ORPHI_ATTR,
+        ORPLO_ATTR,
         # IntelliChlor sensors
         SALT_ATTR,
     },
     HEATER_TYPE: {SNAME_ATTR, BODY_ATTR, LISTORD_ATTR},
-    PUMP_TYPE: {SNAME_ATTR, STATUS_ATTR, PWR_ATTR, RPM_ATTR, GPM_ATTR},
+    PUMP_TYPE: {
+        SNAME_ATTR,
+        STATUS_ATTR,
+        PWR_ATTR,
+        RPM_ATTR,
+        GPM_ATTR,
+        # Pump operational limits (diagnostic)
+        MAX_ATTR,
+        MIN_ATTR,
+        MAXF_ATTR,
+        MINF_ATTR,
+    },
     SENSE_TYPE: {SNAME_ATTR, SOURCE_ATTR},
     SCHED_TYPE: {SNAME_ATTR, ACT_ATTR, VACFLO_ATTR},
-    SYSTEM_TYPE: {MODE_ATTR, VACFLO_ATTR},
+    SYSTEM_TYPE: {MODE_ATTR, VACFLO_ATTR, VER_ATTR},  # VER_ATTR for firmware version
 }
 
 
