@@ -239,6 +239,7 @@ async def async_setup_entry(
                             device_class=None,
                             attribute_key=PHTNK_ATTR,
                             name="+ (pH Tank Level)",
+                            entity_category=EntityCategory.DIAGNOSTIC,
                         )
                     )
                 if ORPTNK_ATTR in obj.attribute_keys:
@@ -249,6 +250,7 @@ async def async_setup_entry(
                             device_class=None,
                             attribute_key=ORPTNK_ATTR,
                             name="+ (ORP Tank Level)",
+                            entity_category=EntityCategory.DIAGNOSTIC,
                         )
                     )
                 # Water chemistry configuration sensors (read-only)
