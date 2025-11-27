@@ -1,0 +1,77 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy bandit
+
+      - name: Ruff lint
+        run: ruff check custom_components/
+
+      - name: Ruff format check
+        run: ruff format --check custom_components/
+
+      - name: Bandit security scan
+        run: bandit -r custom_components/intellicenter/ -ll
+
+      - name: Type check
+        run: mypy custom_components/intellicenter/ --ignore-missing-imports
+        continue-on-error: true
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio pytest-cov \
+            pytest-homeassistant-custom-component \
+            "pyintellicenter>=0.1.1"
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=custom_components/intellicenter \
+            --cov-report=term-missing
+
+  validate:
+    name: HA & HACS Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@master
+
+      - name: HACS
+        uses: hacs/action@main
+        with:
+          category: integration
